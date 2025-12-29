@@ -44,6 +44,42 @@ const assets = struct {
     const security_hub = @embedFile("moon_base_assets/security_hub.ogg");
     const terminal_tick = @embedFile("moon_base_assets/terminal_tick.ogg");
     const sleeping_pods = @embedFile("moon_base_assets/sleeping_pods.ogg");
+    const alien_sonar = @embedFile("moon_base_assets/alien_sonar.ogg");
+    const alien_death = @embedFile("moon_base_assets/alien_death.ogg");
+    
+    // Mine Assets
+    const crusher_broken = @embedFile("moon_base_assets/crusher_broken.ogg");
+    const deep_tunnel = @embedFile("moon_base_assets/deep_tunnel.ogg");
+    const tape_rewind = @embedFile("moon_base_assets/tape_rewind.ogg");
+    const tape_click = @embedFile("moon_base_assets/tape_click.ogg");
+    const tape_log = @embedFile("moon_base_assets/tape_log.ogg");
+    const toilet_flush_0 = @embedFile("moon_base_assets/toilet_flush_0.ogg");
+    const toilet_flush_1 = @embedFile("moon_base_assets/toilet_flush_1.ogg");
+    const toilet_flush_2 = @embedFile("moon_base_assets/toilet_flush_2.ogg");
+    const toilet_flush_3 = @embedFile("moon_base_assets/toilet_flush_3.ogg");
+    const toilet_flush_4 = @embedFile("moon_base_assets/toilet_flush_4.ogg");
+    const toilet_flush_5 = @embedFile("moon_base_assets/toilet_flush_5.ogg");
+    const toilet_flush_6 = @embedFile("moon_base_assets/toilet_flush_6.ogg");
+    const toilet_flush_7 = @embedFile("moon_base_assets/toilet_flush_7.ogg");
+    const sleep_sounds = @embedFile("moon_base_assets/sleep_sounds.ogg");
+    const drawer_open = @embedFile("moon_base_assets/drawer_open.ogg");
+    const train_rumble = @embedFile("moon_base_assets/train_rumble.ogg");
+    const reaction_0 = @embedFile("moon_base_assets/reaction_0.ogg");
+    const reaction_1 = @embedFile("moon_base_assets/reaction_1.ogg");
+    const reaction_2 = @embedFile("moon_base_assets/reaction_2.ogg");
+    const reaction_3 = @embedFile("moon_base_assets/reaction_3.ogg");
+    const reaction_4 = @embedFile("moon_base_assets/reaction_4.ogg");
+    const reaction_5 = @embedFile("moon_base_assets/reaction_5.ogg");
+    const reaction_6 = @embedFile("moon_base_assets/reaction_6.ogg");
+
+    const lever_clonk = @embedFile("moon_base_assets/lever_clonk.ogg");
+    const lever_bad_0 = @embedFile("moon_base_assets/lever_bad_0.ogg");
+    const lever_bad_1 = @embedFile("moon_base_assets/lever_bad_1.ogg");
+    const lever_bad_2 = @embedFile("moon_base_assets/lever_bad_2.ogg");
+    const lever_bad_3 = @embedFile("moon_base_assets/lever_bad_3.ogg");
+    const lever_good_0 = @embedFile("moon_base_assets/lever_good_0.ogg");
+    const lever_good_1 = @embedFile("moon_base_assets/lever_good_1.ogg");
+    const lever_good_2 = @embedFile("moon_base_assets/lever_good_2.ogg");
 };
 
 const LocationId = enum {
@@ -64,6 +100,15 @@ const LocationId = enum {
     launch_control,
     escape_pod,
     elevator_interior,
+    // Mine Level
+    mine_elevator_lobby,
+    work_room,
+    bunk_room,
+    shower_area,
+    toilet_room,
+    crusher_room,
+    tunnel_entrance,
+    mine_storage,
 };
 
 const Item = enum {
@@ -118,6 +163,22 @@ const GameState = struct {
     elevator_moving_down: bool = false,
     in_terminal: bool = false,
     game_over: bool = false,
+    
+    // Mine State
+    mine_powered: bool = false,
+    tape_rewound: bool = false,
+    lever_pulled: bool = false,
+
+    // Alien State
+    alien_active: bool = false,
+    alien_pos: LocationId = .observation_dome,
+    alien_timer: f32 = 0.0,
+    alien_move_timer: f32 = 0.0,
+    alien_moves_made: u8 = 0,
+    spawn_timer: f32 = 0.0,
+    rumble_timer: f32 = 0.0,
+    rumble_active: bool = false,
+    rumble_stage: u8 = 0, // 0: inactive, 1: playing rumble, 2: playing reaction
 
     fn hasItem(self: *GameState, item: Item) bool {
         return self.inventory[@intFromEnum(item)];
@@ -152,8 +213,157 @@ export fn getElevatorMovingPtr() [*]const u8 { return assets.elevator_moving.ptr
 export fn getElevatorMovingLen() usize { return assets.elevator_moving.len; }
 export fn getElevatorDeathPtr() [*]const u8 { return assets.elevator_death.ptr; }
 export fn getElevatorDeathLen() usize { return assets.elevator_death.len; }
+export fn getAlienDeathPtr() [*]const u8 { return assets.alien_death.ptr; }
+export fn getAlienDeathLen() usize { return assets.alien_death.len; }
+
+export fn getTapeRewindPtr() [*]const u8 { return assets.tape_rewind.ptr; }
+export fn getTapeRewindLen() usize { return assets.tape_rewind.len; }
+export fn getTapeClickPtr() [*]const u8 { return assets.tape_click.ptr; }
+export fn getTapeClickLen() usize { return assets.tape_click.len; }
+export fn getTapeLogPtr() [*]const u8 { return assets.tape_log.ptr; }
+export fn getTapeLogLen() usize { return assets.tape_log.len; }
+
+export fn getAlienActive() bool { return state.alien_active; }
+export fn getAlienPos() u8 { return @intFromEnum(state.alien_pos); }
+
+export fn tick(dt: f32) void {
+    if (state.game_over) return;
+
+    // Spawn logic: 30% chance every minute
+    state.spawn_timer += dt;
+    if (state.spawn_timer >= 60.0) {
+        state.spawn_timer = 0.0;
+        // Simple pseudo-random using time/memory address would be better, but we don't have good rng here.
+        // We can use a simple counter or just rely on the fact that dt fluctuates slightly?
+        // Let's use a Linear Congruential Generator with a seed we update.
+        // Or simpler: pass a random number from JS in tick?
+        // Let's just assume 30% for now with a naive check.
+        // Since we don't have random source, let's ask JS to provide entropy or just make it deterministic for now.
+        // Actually, let's implement a simple LCG.
+    }
+}
+
+// Simple LCG
+var rng_state: u32 = 12345;
+fn randomFloat() f32 {
+    rng_state = rng_state *% 1664525 +% 1013904223;
+    return @as(f32, @floatFromInt(rng_state >> 8)) / 16777216.0;
+}
+
+export fn getReactionPtr(id: u8) [*]const u8 {
+    return switch(id) {
+        0 => assets.reaction_0.ptr, 1 => assets.reaction_1.ptr, 2 => assets.reaction_2.ptr, 3 => assets.reaction_3.ptr,
+        4 => assets.reaction_4.ptr, 5 => assets.reaction_5.ptr, 6 => assets.reaction_6.ptr, else => assets.reaction_0.ptr
+    };
+}
+export fn getReactionLen(id: u8) usize {
+    return switch(id) {
+        0 => assets.reaction_0.len, 1 => assets.reaction_1.len, 2 => assets.reaction_2.len, 3 => assets.reaction_3.len,
+        4 => assets.reaction_4.len, 5 => assets.reaction_5.len, 6 => assets.reaction_6.len, else => assets.reaction_0.len
+    };
+}
+
+export fn tickWithSeed(dt: f32, seed: u32) void {
+    if (state.game_over) return;
+    rng_state = rng_state +% seed; // Mix in entropy from JS
+
+    // Rumble Logic
+    if (!state.rumble_active) {
+        state.rumble_timer += dt;
+        // Trigger roughly every 60 seconds
+        if (state.rumble_timer >= 60.0) {
+             state.rumble_timer = 0.0;
+             state.rumble_active = true;
+             state.rumble_stage = 1;
+             playSound(assets.train_rumble.ptr, assets.train_rumble.len, false);
+             jsPrint("\n[ The ground begins to tremble... a deep, growing roar fills the air... ]\n");
+        }
+    } else {
+        state.rumble_timer += dt;
+        if (state.rumble_stage == 1 and state.rumble_timer >= 15.0) { // Rumble finished
+            state.rumble_stage = 2;
+            state.rumble_timer = 0.0;
+            // Play random reaction
+            const r_idx = @as(u8, @intFromFloat(randomFloat() * 7.0));
+            const r_ptr = getReactionPtr(r_idx);
+            const r_len = getReactionLen(r_idx);
+            playSound(r_ptr, r_len, false);
+            
+            const r_text = switch(r_idx) {
+                0 => "What was that?", 1 => "What in the...", 2 => "I wonder what that is.", 3 => "What in the world just happened?",
+                4 => "I hope this place doesn't collapse.", 5 => "Is that dust coming from the ceiling?!", 6 => "Wow.", else => "..."
+            };
+            jsPrint("\nYOU: \""); jsPrint(r_text); jsPrint("\"\n");
+        } else if (state.rumble_stage == 2 and state.rumble_timer >= 5.0) {
+            state.rumble_active = false;
+            state.rumble_stage = 0;
+            state.rumble_timer = 0.0;
+        }
+    }
+
+    // Spawn logic
+    state.spawn_timer += dt;
+    if (!state.alien_active and state.spawn_timer >= 60.0) {
+        state.spawn_timer = 0;
+        if (randomFloat() < 0.3) {
+            state.alien_active = true;
+            state.alien_moves_made = 0;
+            state.alien_move_timer = 0.0;
+            state.alien_timer = 0.0;
+            // Pick random start location
+            const loc_idx = @as(usize, @intFromFloat(randomFloat() * 17.0)) % 17;
+            state.alien_pos = @enumFromInt(loc_idx);
+            playSound(assets.alien_sonar.ptr, assets.alien_sonar.len, false);
+        }
+    }
+
+    if (state.alien_active) {
+        state.alien_timer += dt;
+        state.alien_move_timer += dt;
+        
+        // Move every 10 seconds
+        if (state.alien_move_timer >= 10.0) {
+            state.alien_move_timer = 0.0;
+            state.alien_moves_made += 1;
+
+            if (state.alien_moves_made >= 3) {
+                state.alien_active = false; // Disappear after 3 moves (30s total)
+            } else {
+                // Move to adjacent
+                const loc = getLoc(state.alien_pos);
+                var valid_moves: [6]?LocationId = [_]?LocationId{null} ** 6;
+                var count: usize = 0;
+                if (loc.n) |n| { valid_moves[count] = n; count += 1; }
+                if (loc.s) |n| { valid_moves[count] = n; count += 1; }
+                if (loc.e) |n| { valid_moves[count] = n; count += 1; }
+                if (loc.w) |n| { valid_moves[count] = n; count += 1; }
+                if (loc.u) |n| { valid_moves[count] = n; count += 1; }
+                if (loc.d) |n| { valid_moves[count] = n; count += 1; }
+
+                if (count > 0) {
+                    const idx = @as(usize, @intFromFloat(randomFloat() * @as(f32, @floatFromInt(count))));
+                    if (valid_moves[idx]) |new_pos| {
+                        state.alien_pos = new_pos;
+                        playSound(assets.alien_sonar.ptr, assets.alien_sonar.len, false);
+                    }
+                }
+            }
+        }
+
+        // Check collision
+        if (state.alien_active and state.alien_pos == state.current_loc) {
+            triggerSpecialSequence(4); // Alien death sequence
+        }
+    }
+}
 
 export fn setElevatorArrived(val: bool) void { state.elevator_arrived = val; state.elevator_summoning = false; }
+export fn arriveAtMine() void {
+    state.elevator_moving_down = false;
+    changeLocation(.mine_elevator_lobby);
+    jsPrint("\nThe elevator shudders to a halt. The doors open to a dusty cavern.\n");
+}
+
 export fn setGameOver() void { state.game_over = true; }
 
 const locations = [_]Location{
@@ -167,7 +377,7 @@ const locations = [_]Location{
     .{
         .id = .comms_array,
         .name = "Communications Array",
-        .description = "Towering racks of vacuum tubes. A terminal console is active here.",
+        .description = "Towering racks of vacuum tubes. The equipment here is mostly passive reception gear.",
         .item_description = "Logic Board A: Gold contacts still shine.",
         .bg_sound = assets.comms_array,
         .n = .observation_dome,
@@ -176,7 +386,7 @@ const locations = [_]Location{
     .{
         .id = .security_hub,
         .name = "Security Hub",
-        .description = "Banks of CRT monitors show grainy views of empty corridors. A terminal is here.",
+        .description = "Banks of CRT monitors show grainy views of empty corridors. A single central terminal is active here.",
         .item_description = "Control Board B: Black polymer shell.",
         .bg_sound = assets.security_hub,
         .w = .comms_array,
@@ -273,7 +483,7 @@ const locations = [_]Location{
     .{
         .id = .oxygen_scrubbers,
         .name = "Oxygen Scrubbers",
-        .description = "Giant glass cylinders filled with bubbling green algae. Terminal active.",
+        .description = "Giant glass cylinders filled with bubbling green algae. The air is fresh but the monitoring station is dark.",
         .item_description = "Interface Board D: Complex 1955-era multi-pin.",
         .bg_sound = assets.oxygen_scrubbers,
         .e = .cargo_loading,
@@ -300,6 +510,69 @@ const locations = [_]Location{
         .description = "Quilted metal padding. A single 'LOWER LEVELS' button is here.",
         .bg_sound = assets.elevator_moving,
     },
+    // Mine Rooms
+    .{
+        .id = .mine_elevator_lobby,
+        .name = "Mine Level: Lobby",
+        .description = "Rough hewn rock walls reinforced with rusty steel beams. The elevator shaft goes up. Dust motes dance in the air.",
+        .bg_sound = assets.elevator_lobby_beta, // Reuse or silence? Let's reuse beta for industrial feel
+        .e = .work_room,
+        .d = .bunk_room, // Stairs down
+    },
+    .{
+        .id = .work_room,
+        .name = "Mine Level: Work Room",
+        .description = "A cluttered workspace. Blueprints scattered on the floor. A heavy desk sits against the wall with a tape recorder on it. A small, pixelated picture hangs on the wall.",
+        .bg_sound = assets.security_hub, // Reuse tech sound
+        .w = .mine_elevator_lobby,
+    },
+    .{
+        .id = .bunk_room,
+        .name = "Mine Level: Bunk Room",
+        .description = "Cramped living quarters. Triple-stacked bunk beds. A reading lamp flickers over a pile of old magazines.",
+        .bg_sound = assets.sleeping_pods,
+        .u = .mine_elevator_lobby, // Stairs up
+        .s = .shower_area,
+    },
+    .{
+        .id = .shower_area,
+        .name = "Mine Level: Showers",
+        .description = "Communal showers. The tiles are cracked and yellowed. Water drips rhythmically.",
+        .bg_sound = assets.medical_lab, // Reuse sterile/watery sound
+        .n = .bunk_room,
+        .e = .toilet_room,
+    },
+    .{
+        .id = .toilet_room,
+        .name = "Mine Level: Toilets",
+        .description = "A row of industrial toilets. The smell is ancient and metallic.",
+        .bg_sound = assets.airlock_hiss, // Reuse hiss for pipe noise
+        .w = .shower_area,
+        .d = .mine_storage, // Stairs down
+    },
+    .{
+        .id = .crusher_room,
+        .name = "Stone Crushing Room",
+        .description = "Dominated by a massive, silent crushing machine. Conveyor belts sit idle. A dark opening leads to the tunnels.",
+        .bg_sound = assets.maintenance_tunnels,
+        .w = .mine_storage,
+        .s = .tunnel_entrance,
+    },
+    .{
+        .id = .tunnel_entrance,
+        .name = "Deep Tunnel Entrance",
+        .description = "The lights end here. A pitch-black tunnel descends into the crust. You hear strange robotic sounds echoing from the deep.",
+        .bg_sound = assets.deep_tunnel,
+        .n = .crusher_room,
+    },
+    .{
+        .id = .mine_storage,
+        .name = "Mine Level: Storage",
+        .description = "Crates of mining explosives and pickaxes. A massive industrial lever is mounted on the wall. A heavy blast door leads to the crushing room.",
+        .bg_sound = assets.cargo_loading,
+        .u = .toilet_room, // Stairs up
+        .e = .crusher_room,
+    },
 };
 
 fn getLoc(id: LocationId) *const Location { return &locations[@intFromEnum(id)]; }
@@ -309,6 +582,13 @@ fn jsTerminal(text: []const u8) void { printTerminal(text.ptr, text.len); }
 fn changeLocation(id: LocationId) void {
     state.current_loc = id;
     state.visited[@intFromEnum(id)] = true;
+    
+    // Check alien collision on entry
+    if (state.alien_active and state.alien_pos == state.current_loc) {
+        triggerSpecialSequence(4);
+        return;
+    }
+
     const loc = getLoc(id);
     stopLoopingSounds();
     playSound(loc.bg_sound.ptr, loc.bg_sound.len, true);
@@ -335,6 +615,11 @@ fn changeLocation(id: LocationId) void {
         }
     }
     if (id == .elevator_interior and !state.elevator_moving_down) jsPrint("[ HINT: You can 'push button' to descend. ]\n");
+    if (id == .mine_elevator_lobby) jsPrint("[ HINT: The elevator leads back 'up'. ]\n");
+    if (id == .work_room) jsPrint("[ HINT: You can 'play tape' or 'rewind tape' here. ]\n");
+    if (id == .toilet_room) jsPrint("[ HINT: You can 'flush' the toilet. ]\n");
+    if (id == .crusher_room) jsPrint("[ HINT: You can try to 'start machine'. ]\n");
+    if (id == .bunk_room) jsPrint("[ HINT: You can 'sleep' or 'read'. ]\n");
 }
 
 export fn init() void {
@@ -376,11 +661,23 @@ export fn onCommand(len: usize) void {
         } else if (std.mem.eql(u8, cmd, "power")) {
             if (state.reactor_powered) {
                 jsTerminal("\n> SOURCE: MAIN REACTOR\n> STATUS: ONLINE / STABLE\n> GRID LOAD: 42%\n");
+                if (state.mine_powered) {
+                    jsTerminal("> MINE AUXILIARY: ACTIVE\n");
+                } else {
+                    jsTerminal("> MINE AUXILIARY: OFFLINE\n");
+                }
             } else {
                 jsTerminal("\n> SOURCE: EMERGENCY BATTERY\n> STATUS: LOW POWER MODE\n> DRAIN RATE: CRITICAL\n");
             }
+        } else if (std.mem.eql(u8, cmd, "activate") and arg != null and (std.mem.eql(u8, arg.?, "generator") or std.mem.eql(u8, arg.?, "mine"))) {
+            if (state.reactor_powered) {
+                 state.mine_powered = true;
+                 jsTerminal("\n> INITIATING HANDSHAKE...\n> MINE GENERATOR SYNCED.\n> ELEVATOR SAFETY LOCKS: DISENGAGED.\n");
+            } else {
+                 jsTerminal("\n> ERROR: INSUFFICIENT POWER TO ACTIVATE REMOTE SUBSYSTEMS.\n");
+            }
         } else if (std.mem.eql(u8, cmd, "help")) {
-            jsTerminal("\nAVAILABLE DIAGNOSTICS: TEMP, AIR, WATER, POWER, EXIT\n");
+            jsTerminal("\nAVAILABLE DIAGNOSTICS: TEMP, AIR, WATER, POWER, ACTIVATE GENERATOR, EXIT\n");
         } else {
             jsTerminal("\nCOMMAND NOT RECOGNIZED. TYPE 'HELP' FOR OPTIONS.\n");
         }
@@ -388,6 +685,10 @@ export fn onCommand(len: usize) void {
     }
 
     if (std.mem.eql(u8, cmd, "terminal")) {
+        if (state.current_loc != .security_hub) {
+            jsPrint("There is no active terminal here. The Security Hub might have one.\n");
+            return;
+        }
         state.in_terminal = true;
         jsTerminal("\n--- MUTHUR 6000 CENTRAL INTERFACE ---\n");
         jsTerminal("READY FOR INPUT: TEMP, AIR, WATER, POWER, EXIT\n");
@@ -408,8 +709,114 @@ export fn onCommand(len: usize) void {
         if (state.current_loc == .elevator_interior and !state.elevator_moving_down) {
             playSound(assets.elevator_button.ptr, assets.elevator_button.len, false);
             state.elevator_moving_down = true;
-            jsPrint("The doors slide shut. The elevator begins to descend.\n"); triggerSpecialSequence(2);
+            jsPrint("The doors slide shut. The elevator begins to descend.\n");
+            if (state.mine_powered) {
+                triggerSpecialSequence(5); // Mine arrival
+            } else {
+                triggerSpecialSequence(2); // Death
+            }
         } else jsPrint("Nothing to push here.\n");
+    } else if (std.mem.eql(u8, cmd, "flush")) {
+        if (state.current_loc == .toilet_room) {
+            // Random flush sound 0-7 using LCG
+            const seed = @as(usize, @intFromFloat(randomFloat() * 8.0));
+            const s = switch(seed) {
+                0 => assets.toilet_flush_0, 1 => assets.toilet_flush_1, 2 => assets.toilet_flush_2, 3 => assets.toilet_flush_3,
+                4 => assets.toilet_flush_4, 5 => assets.toilet_flush_5, 6 => assets.toilet_flush_6, 7 => assets.toilet_flush_7,
+                else => assets.toilet_flush_0
+            };
+            playSound(s.ptr, s.len, false);
+            jsPrint("WHOOSH! You flush the toilet.\n");
+        } else jsPrint("No toilet here.\n");
+    } else if (std.mem.eql(u8, cmd, "start")) {
+        if (state.current_loc == .crusher_room) {
+            playSound(assets.crusher_broken.ptr, assets.crusher_broken.len, false);
+            jsPrint("The machine coughs and sputters. It sounds broken.\n");
+        } else jsPrint("Nothing to start here.\n");
+    } else if (std.mem.eql(u8, cmd, "sleep")) {
+        if (state.current_loc == .bunk_room) {
+            playSound(assets.sleep_sounds.ptr, assets.sleep_sounds.len, false);
+            jsPrint("You lay down for a moment. The bed is hard but the rest is welcome.\n");
+        } else jsPrint("Not a good place to sleep.\n");
+    } else if (std.mem.eql(u8, cmd, "read")) {
+        if (state.current_loc == .bunk_room) {
+            jsPrint("You pick up a magazine. 'Popular Mechanics: July 1954'. It details flying cars.\n");
+        } else jsPrint("Nothing to read here.\n");
+    } else if (std.mem.eql(u8, cmd, "play")) {
+        if (state.current_loc == .work_room) {
+             playSound(assets.tape_click.ptr, assets.tape_click.len, false);
+             if (!state.tape_rewound) {
+                 jsPrint("The tape heads spin for a second then stop. It needs rewinding.\n");
+             } else {
+                 playSound(assets.tape_log.ptr, assets.tape_log.len, false);
+                 jsPrint("Playing log...\n");
+                 state.tape_rewound = false;
+             }
+        } else jsPrint("Nothing to play here.\n");
+    } else if (std.mem.eql(u8, cmd, "rewind")) {
+        if (state.current_loc == .work_room) {
+             playSound(assets.tape_rewind.ptr, assets.tape_rewind.len, false);
+             jsPrint("Rewinding tape...\n");
+             state.tape_rewound = true;
+        } else jsPrint("Nothing to rewind here.\n");
+    } else if (std.mem.eql(u8, cmd, "pull") or (std.mem.eql(u8, cmd, "push") and arg != null and std.mem.eql(u8, arg.?, "lever"))) {
+        if (state.current_loc == .mine_storage) {
+            playSound(assets.lever_clonk.ptr, assets.lever_clonk.len, false);
+            state.lever_pulled = !state.lever_pulled;
+
+            if (state.lever_pulled) {
+                // Lights out
+                jsPrint("KLONK. The lights flicker and die. Total darkness engulfs the mine.\n");
+                
+                // Play random bad reaction
+                const seed = @as(usize, @intFromFloat(randomFloat() * 4.0));
+                const s = switch(seed) {
+                    0 => assets.lever_bad_0, 1 => assets.lever_bad_1, 2 => assets.lever_bad_2, 3 => assets.lever_bad_3, else => assets.lever_bad_0
+                };
+                // Delay slightly for effect? No, just play.
+                playSound(s.ptr, s.len, false);
+                
+                const txt = switch(seed) {
+                    0 => "Uh oh.", 1 => "That wasn't good.", 2 => "...", 3 => "What happened to the lights?", else => "..."
+                };
+                jsPrint("YOU: \""); jsPrint(txt); jsPrint("\"\n");
+
+            } else {
+                // Lights on
+                jsPrint("KLONK. A generator hums to life. The lights flicker back on.\n");
+                playSound(assets.reactor_ignition_roar.ptr, assets.reactor_ignition_roar.len, false); // Reuse hum
+
+                // Play random good reaction
+                const seed = @as(usize, @intFromFloat(randomFloat() * 3.0));
+                const s = switch(seed) {
+                    0 => assets.lever_good_0, 1 => assets.lever_good_1, 2 => assets.lever_good_2, else => assets.lever_good_0
+                };
+                playSound(s.ptr, s.len, false);
+
+                const txt = switch(seed) {
+                    0 => "That's better.", 1 => "Alright.", 2 => "Much better.", else => "..."
+                };
+                jsPrint("YOU: \""); jsPrint(txt); jsPrint("\"\n");
+            }
+        } else jsPrint("No lever here.\n");
+    } else if (std.mem.eql(u8, cmd, "open") and arg != null and std.mem.eql(u8, arg.?, "drawer")) {
+        if (state.current_loc == .work_room) {
+            playSound(assets.drawer_open.ptr, assets.drawer_open.len, false);
+            // Generate random 4-letter code
+            const l1 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+            const l2 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+            const l3 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+            const l4 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+            jsPrint("You slide the drawer open. Inside is a manual: 'Operating the Express48 Type B Mining Shuttle'.\n");
+            jsPrint("Handwritten on the cover is a code: ");
+            const code = [_]u8{l1, l2, l3, l4};
+            jsPrint(&code); jsPrint("\n");
+        } else jsPrint("No drawer here.\n");
+    } else if (std.mem.eql(u8, cmd, "look") and arg != null and std.mem.eql(u8, arg.?, "picture")) {
+        if (state.current_loc == .work_room) {
+            triggerSpecialSequence(6);
+            jsPrint("You peer closely at the pixelated masterpiece.\n");
+        } else jsPrint("No picture here.\n");
     } else if (std.mem.eql(u8, cmd, "unlock") and arg != null and std.mem.eql(u8, arg.?, "airlock")) {
         if (state.current_loc == .observation_dome) {
             playSound(assets.airlock_death.ptr, assets.airlock_death.len, false);
