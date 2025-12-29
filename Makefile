@@ -2,20 +2,26 @@
 
 ZIG_VERSION := 0.13.0
 ZIG_URL := https://ziglang.org/download/$(ZIG_VERSION)/zig-linux-x86_64-$(ZIG_VERSION).tar.xz
+ZIG_DIR := zig-linux-x86_64-$(ZIG_VERSION)
 
-# Detect if zig is in the path, otherwise use a local one
-ZIG := $(shell which zig 2>/dev/null || echo ./zig-linux-x86_64-$(ZIG_VERSION)/zig)
+FFMPEG_URL := https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+FFMPEG_DIR := ffmpeg-static
 
+# Detect tools in path or local directories
+ZIG := $(shell which zig 2>/dev/null || echo ./$(ZIG_DIR)/zig)
+FFMPEG := $(shell which ffmpeg 2>/dev/null || echo ./$(FFMPEG_DIR)/ffmpeg)
 PYTHON := python3
-FFMPEG := ffmpeg
 
 ASSET_DIR := moon_base_assets
 WASM_TARGET := game.wasm
 WASM_B64 := game.wasm.base64
 
-.PHONY: all build clean gensamples setup_zig
+.PHONY: all build clean gensamples setup_tools setup_zig setup_ffmpeg
 
 all: build
+
+setup_tools: setup_zig setup_ffmpeg
+	@if ! which $(PYTHON) >/dev/null 2>&1; then echo "Error: python3 not found."; exit 1; fi
 
 setup_zig:
 	@if [ ! -x "$(ZIG)" ]; then \
@@ -23,7 +29,14 @@ setup_zig:
 		curl -L $(ZIG_URL) | tar -xJ; \
 	fi
 
-build: setup_zig $(WASM_TARGET) $(WASM_B64) backstory_frames.json
+setup_ffmpeg:
+	@if [ ! -x "$(FFMPEG)" ]; then \
+		echo "FFmpeg not found. Downloading static build..."; \
+		mkdir -p $(FFMPEG_DIR); \
+		curl -L $(FFMPEG_URL) | tar -xJ -C $(FFMPEG_DIR) --strip-components=1; \
+	fi
+
+build: setup_tools $(WASM_TARGET) $(WASM_B64) backstory_frames.json
 	$(PYTHON) embed_wasm.py
 
 $(WASM_TARGET): game.zig
@@ -35,7 +48,7 @@ $(WASM_B64): $(WASM_TARGET)
 backstory_frames.json: gen_frames.py
 	$(PYTHON) gen_frames.py > backstory_frames.json
 
-gensamples:
+gensamples: setup_tools
 	$(PYTHON) generate_moon_base_sounds.py
 	$(PYTHON) generate_intro_synth.py
 	$(PYTHON) generate_backstory_audio.py
@@ -48,6 +61,6 @@ gensamples:
 
 clean:
 	rm -f $(WASM_TARGET) $(WASM_B64) game.wasm.o backstory_frames.json
-	rm -rf zig-linux-x86_64-$(ZIG_VERSION)
+	rm -rf $(ZIG_DIR) $(FFMPEG_DIR)
 	find $(ASSET_DIR) -name "*.wav" -delete
 	find $(ASSET_DIR) -name "*.ogg" -delete

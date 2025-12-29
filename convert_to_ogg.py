@@ -4,8 +4,9 @@ import subprocess
 def convert_wav_to_ogg(wav_path):
     ogg_path = wav_path.replace('.wav', '.ogg')
     print(f"Converting {wav_path} to {ogg_path}...")
+    ffmpeg_bin = os.environ.get('FFMPEG', 'ffmpeg')
     # -q:a 6 is high quality (approx 192kbps)
-    cmd = ['ffmpeg', '-y', '-i', wav_path, '-c:a', 'libvorbis', '-q:a', '6', ogg_path]
+    cmd = [ffmpeg_bin, '-y', '-i', wav_path, '-c:a', 'libvorbis', '-q:a', '6', ogg_path]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def main():
