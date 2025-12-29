@@ -80,6 +80,7 @@ const assets = struct {
     const lever_good_0 = @embedFile("moon_base_assets/lever_good_0.ogg");
     const lever_good_1 = @embedFile("moon_base_assets/lever_good_1.ogg");
     const lever_good_2 = @embedFile("moon_base_assets/lever_good_2.ogg");
+    const work_room_bg = @embedFile("moon_base_assets/work_room_bg.ogg");
 };
 
 const LocationId = enum {
@@ -168,6 +169,7 @@ const GameState = struct {
     mine_powered: bool = false,
     tape_rewound: bool = false,
     lever_pulled: bool = false,
+    elevator_level: u8 = 0, // 0: Top, 1: Bottom (Mine)
 
     // Alien State
     alien_active: bool = false,
@@ -270,8 +272,8 @@ export fn tickWithSeed(dt: f32, seed: u32) void {
     // Rumble Logic
     if (!state.rumble_active) {
         state.rumble_timer += dt;
-        // Trigger roughly every 60 seconds
-        if (state.rumble_timer >= 60.0) {
+        // Trigger roughly every 120 seconds
+        if (state.rumble_timer >= 120.0) {
              state.rumble_timer = 0.0;
              state.rumble_active = true;
              state.rumble_stage = 1;
@@ -360,8 +362,16 @@ export fn tickWithSeed(dt: f32, seed: u32) void {
 export fn setElevatorArrived(val: bool) void { state.elevator_arrived = val; state.elevator_summoning = false; }
 export fn arriveAtMine() void {
     state.elevator_moving_down = false;
+    state.elevator_level = 1;
     changeLocation(.mine_elevator_lobby);
     jsPrint("\nThe elevator shudders to a halt. The doors open to a dusty cavern.\n");
+}
+
+export fn arriveAtLobby() void {
+    state.elevator_moving_down = false;
+    state.elevator_level = 0;
+    changeLocation(.elevator_lobby_beta); // Return to Beta lobby? Or Alpha? Beta is closer to Reactor.
+    jsPrint("\nThe elevator chimes politely. The doors open to the polished corridors.\n");
 }
 
 export fn setGameOver() void { state.game_over = true; }
@@ -523,7 +533,7 @@ const locations = [_]Location{
         .id = .work_room,
         .name = "Mine Level: Work Room",
         .description = "A cluttered workspace. Blueprints scattered on the floor. A heavy desk sits against the wall with a tape recorder on it. A small, pixelated picture hangs on the wall.",
-        .bg_sound = assets.security_hub, // Reuse tech sound
+        .bg_sound = assets.work_room_bg,
         .w = .mine_elevator_lobby,
     },
     .{
@@ -607,7 +617,7 @@ fn changeLocation(id: LocationId) void {
     if (!has_exits) jsPrint("None.\n");
     jsPrint("\n");
     if (id == .observation_dome) jsPrint("[ HINT: You could 'unlock airlock' here. ]\n");
-    if (id == .elevator_lobby_alpha or id == .elevator_lobby_beta) {
+    if (id == .elevator_lobby_alpha or id == .elevator_lobby_beta or id == .mine_elevator_lobby) {
         if (!state.elevator_arrived) {
             jsPrint("[ HINT: You can 'summon elevator' here. ]\n");
         } else {
@@ -615,7 +625,6 @@ fn changeLocation(id: LocationId) void {
         }
     }
     if (id == .elevator_interior and !state.elevator_moving_down) jsPrint("[ HINT: You can 'push button' to descend. ]\n");
-    if (id == .mine_elevator_lobby) jsPrint("[ HINT: The elevator leads back 'up'. ]\n");
     if (id == .work_room) jsPrint("[ HINT: You can 'play tape' or 'rewind tape' here. ]\n");
     if (id == .toilet_room) jsPrint("[ HINT: You can 'flush' the toilet. ]\n");
     if (id == .crusher_room) jsPrint("[ HINT: You can try to 'start machine'. ]\n");
@@ -640,6 +649,7 @@ export fn getInputBuffer() [*]u8 { return &input_buffer; }
 
 export fn onCommand(len: usize) void {
     if (state.game_over) return;
+    rng_state = rng_state +% len; // Add command entropy
     const cmd_full = input_buffer[0..len];
     var it = std.mem.tokenizeAny(u8, cmd_full, " ");
     const cmd = it.next() orelse return;
@@ -693,7 +703,7 @@ export fn onCommand(len: usize) void {
         jsTerminal("\n--- MUTHUR 6000 CENTRAL INTERFACE ---\n");
         jsTerminal("READY FOR INPUT: TEMP, AIR, WATER, POWER, EXIT\n");
     } else if (std.mem.eql(u8, cmd, "summon") or (std.mem.eql(u8, cmd, "press") and arg != null and std.mem.eql(u8, arg.?, "button"))) {
-        if (state.current_loc == .elevator_lobby_alpha or state.current_loc == .elevator_lobby_beta) {
+        if (state.current_loc == .elevator_lobby_alpha or state.current_loc == .elevator_lobby_beta or state.current_loc == .mine_elevator_lobby) {
             if (state.elevator_arrived) { jsPrint("The elevator is already here.\n"); return; }
             if (state.elevator_summoning) { jsPrint("The elevator is on its way.\n"); return; }
             playSound(assets.elevator_button.ptr, assets.elevator_button.len, false);
@@ -701,19 +711,29 @@ export fn onCommand(len: usize) void {
             jsPrint("You press the button. A distant hum begins to vibrate through the floor.\n");
         } else jsPrint("There is no elevator here.\n");
     } else if (std.mem.eql(u8, cmd, "enter") or std.mem.eql(u8, cmd, "in")) {
-        if (state.current_loc == .elevator_lobby_alpha or state.current_loc == .elevator_lobby_beta) {
+        if (state.current_loc == .elevator_lobby_alpha or state.current_loc == .elevator_lobby_beta or state.current_loc == .mine_elevator_lobby) {
             if (!state.elevator_arrived) { jsPrint("The elevator is not here.\n"); return; }
+            if (state.current_loc == .mine_elevator_lobby) {
+                state.elevator_level = 1;
+            } else {
+                state.elevator_level = 0;
+            }
             jsPrint("You step into the elevator.\n"); changeLocation(.elevator_interior);
         } else jsPrint("There is nothing to enter here.\n");
     } else if (std.mem.eql(u8, cmd, "push") or std.mem.eql(u8, cmd, "press")) {
         if (state.current_loc == .elevator_interior and !state.elevator_moving_down) {
             playSound(assets.elevator_button.ptr, assets.elevator_button.len, false);
             state.elevator_moving_down = true;
-            jsPrint("The doors slide shut. The elevator begins to descend.\n");
-            if (state.mine_powered) {
-                triggerSpecialSequence(5); // Mine arrival
-            } else {
-                triggerSpecialSequence(2); // Death
+            jsPrint("The doors slide shut. The elevator begins to move.\n");
+            
+            if (state.elevator_level == 0) { // Top -> Bottom
+                if (state.mine_powered) {
+                    triggerSpecialSequence(5); // Mine arrival
+                } else {
+                    triggerSpecialSequence(2); // Death
+                }
+            } else { // Bottom -> Top
+                triggerSpecialSequence(7); // Ascend
             }
         } else jsPrint("Nothing to push here.\n");
     } else if (std.mem.eql(u8, cmd, "flush")) {
