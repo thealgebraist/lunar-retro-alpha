@@ -78,6 +78,19 @@ const assets = struct {
     const announcement_4 = @embedFile("moon_base_assets/announcement_4.ogg");
     const announcement_5 = @embedFile("moon_base_assets/announcement_5.ogg");
     const announcement_6 = @embedFile("moon_base_assets/announcement_6.ogg");
+    const announcement_7 = @embedFile("moon_base_assets/announcement_7.ogg");
+    const countdown_5m = @embedFile("moon_base_assets/countdown_5m.ogg");
+    const countdown_4m = @embedFile("moon_base_assets/countdown_4m.ogg");
+    const countdown_3m = @embedFile("moon_base_assets/countdown_3m.ogg");
+    const countdown_2m = @embedFile("moon_base_assets/countdown_2m.ogg");
+    const countdown_1m = @embedFile("moon_base_assets/countdown_1m.ogg");
+    const countdown_60s = @embedFile("moon_base_assets/countdown_60s.ogg");
+    const countdown_50s = @embedFile("moon_base_assets/countdown_50s.ogg");
+    const countdown_40s = @embedFile("moon_base_assets/countdown_40s.ogg");
+    const countdown_30s = @embedFile("moon_base_assets/countdown_30s.ogg");
+    const countdown_20s = @embedFile("moon_base_assets/countdown_20s.ogg");
+    const countdown_10s = @embedFile("moon_base_assets/countdown_10s.ogg");
+    const countdown_imminent = @embedFile("moon_base_assets/countdown_imminent.ogg");
 
     const lever_clonk = @embedFile("moon_base_assets/lever_clonk.ogg");
     const lever_bad_0 = @embedFile("moon_base_assets/lever_bad_0.ogg");
@@ -180,6 +193,8 @@ const GameState = struct {
     rumble_stage: u8 = 0, // 0: inactive, 1: playing rumble, 2: playing reaction
     toilet_flush_index: u8 = 0,
     current_announcement_index: u8 = 0,
+    total_time: f32 = 0.0,
+    countdown_active: bool = false,
 
     fn hasItem(self: *GameState, item: Item) bool {
         return self.inventory[@intFromEnum(item)];
@@ -267,38 +282,94 @@ export fn getReactionLen(id: u8) usize {
 export fn tickWithSeed(dt: f32, seed: u32) void {
     if (state.game_over) return;
     rng_state = rng_state +% seed; // Mix in entropy from JS
+    state.total_time += dt;
 
-    // Announcement Logic
-    state.announcement_timer += dt;
-    if (state.announcement_timer >= 90.0) {
-        state.announcement_timer = 0.0;
-        if (@intFromEnum(state.current_loc) <= 15) {
-            const idx = state.current_announcement_index;
-            const sound = switch (idx) {
-                0 => assets.announcement_0,
-                1 => assets.announcement_1,
-                2 => assets.announcement_2,
-                3 => assets.announcement_3,
-                4 => assets.announcement_4,
-                5 => assets.announcement_5,
-                6 => assets.announcement_6,
-                else => assets.announcement_0,
-            };
-            const text = switch (idx) {
-                0 => "Evacuate the station. Oxygen level low.",
-                1 => "This area is off limits.",
-                2 => "Alert! Station integrity compromised.",
-                3 => "Station running on backup power, please restart generator to survive.",
-                4 => "Keep in mind that the radioactivity level rising.",
-                5 => "The mining area is off limits.",
-                6 => "Proceed to the escape pod.",
-                else => "...",
-            };
-            playSound(sound.ptr, sound.len, false);
-            jsPrint("\n[ INTERCOM: \"");
-            jsPrint(text);
-            jsPrint("\" ]\n");
-            state.current_announcement_index = (idx + 1) % 7;
+    // Countdown and Announcement Logic
+    if (!state.countdown_active) {
+        state.announcement_timer += dt;
+        if (state.total_time >= 300.0) { // 5 minutes
+            state.countdown_active = true;
+            state.announcement_timer = 0.0;
+            playSound(assets.countdown_5m.ptr, assets.countdown_5m.len, false);
+            jsPrint("\n[ INTERCOM: \"Station integrity decompensation in 5 minutes.\" ]\n");
+        } else if (state.announcement_timer >= 90.0) {
+            state.announcement_timer = 0.0;
+            if (@intFromEnum(state.current_loc) <= 15) {
+                const idx = state.current_announcement_index;
+                const sound = switch (idx) {
+                    0 => assets.announcement_0,
+                    1 => assets.announcement_1,
+                    2 => assets.announcement_2,
+                    3 => assets.announcement_3,
+                    4 => assets.announcement_4,
+                    5 => assets.announcement_5,
+                    6 => assets.announcement_6,
+                    7 => assets.announcement_7,
+                    else => assets.announcement_0,
+                };
+                const text = switch (idx) {
+                    0 => "Evacuate the station. Oxygen level low.",
+                    1 => "This area is off limits.",
+                    2 => "Alert! Station integrity compromised.",
+                    3 => "Station running on backup power, please restart generator to survive.",
+                    4 => "Keep in mind that the radioactivity is level rising.",
+                    5 => "The mining area is off limits.",
+                    6 => "Proceed to the escape pod.",
+                    7 => "Airlock safety compromised.",
+                    else => "...",
+                };
+                playSound(sound.ptr, sound.len, false);
+                jsPrint("\n[ INTERCOM: \"");
+                jsPrint(text);
+                jsPrint("\" ]\n");
+                state.current_announcement_index = (idx + 1) % 8;
+            }
+        }
+    } else {
+        // Countdown is active
+        const old_timer = state.announcement_timer;
+        state.announcement_timer += dt;
+        const new_timer = state.announcement_timer;
+
+        // Announcements every minute: 4m, 3m, 2m, 1m, 60s
+        // Note: 60s plays at the same time as 1m? The user listed both.
+        // Let's spread them out: 4m (60s in), 3m (120s), 2m (180s), 1m (240s), 60s (240s? No, 241s?)
+        // Actually, let's just trigger based on the list:
+        // 4m @ 60s, 3m @ 120s, 2m @ 180s, 1m @ 240s, 60s @ 241s (to follow 1m)
+        const minute_check = [_]f32{ 60.0, 120.0, 180.0, 240.0, 241.0 };
+        const minute_sounds = [_][]const u8{ assets.countdown_4m, assets.countdown_3m, assets.countdown_2m, assets.countdown_1m, assets.countdown_60s };
+        const minute_texts = [_][]const u8{ "4 minutes", "3 minutes", "2 minutes", "1 minutes", "60 seconds" };
+
+        for (minute_check, 0..) |target, i| {
+            if (old_timer < target and new_timer >= target) {
+                playSound(minute_sounds[i].ptr, minute_sounds[i].len, false);
+                jsPrint("\n[ INTERCOM: \"Station integrity decompensation will occur in ");
+                jsPrint(minute_texts[i]);
+                jsPrint(".\" ]\n");
+            }
+        }
+
+        // Last 6 each ten seconds (50, 40, 30, 20, 10, imminent)
+        // 50s @ 250s, 40s @ 260s, 30s @ 270s, 20s @ 280s, 10s @ 290s, imminent @ 300s
+        const second_check = [_]f32{ 250.0, 260.0, 270.0, 280.0, 290.0, 300.0 };
+        const second_sounds = [_][]const u8{ assets.countdown_50s, assets.countdown_40s, assets.countdown_30s, assets.countdown_20s, assets.countdown_10s, assets.countdown_imminent };
+        const second_texts = [_][]const u8{ "50 seconds", "40 seconds", "30 seconds", "20 seconds", "10 seconds", "STATION INTEGRITY DECOMPENSATION IMMINENT" };
+
+        for (second_check, 0..) |target, i| {
+            if (old_timer < target and new_timer >= target) {
+                playSound(second_sounds[i].ptr, second_sounds[i].len, false);
+                if (i == 5) {
+                    jsPrint("\n[ INTERCOM: \"");
+                    jsPrint(second_texts[i]);
+                    jsPrint("\" ]\n");
+                    // Trigger disintegration sequence
+                    triggerSpecialSequence(5);
+                } else {
+                    jsPrint("\n[ INTERCOM: \"... ");
+                    jsPrint(second_texts[i]);
+                    jsPrint("\" ]\n");
+                }
+            }
         }
     }
 

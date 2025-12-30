@@ -14,6 +14,9 @@ with open('airlock_frames.json', 'r') as f:
 with open('alien_frames.json', 'r') as f:
     alien_data = f.read().strip()
 
+with open('disintegration_frames.json', 'r') as f:
+    disintegration_data = f.read().strip()
+
 # 3. Read the template
 with open('index.template.html', 'r') as f:
     content = f.read()
@@ -49,7 +52,15 @@ alien_end_idx = content.find(alien_end, alien_start + len(alien_marker))
 if alien_start != -1:
     content = content[:alien_start + len(alien_marker)] + alien_data + content[alien_end_idx:]
 
-# 8. Write to index.html and template
+# 8. Replace Disintegration Animation Data
+dis_marker = 'const DISINTEGRATION_ANIMATION_DATA = '
+dis_end = ';'
+dis_start = content.find(dis_marker)
+dis_end_idx = content.find(dis_end, dis_start + len(dis_marker))
+if dis_start != -1:
+    content = content[:dis_start + len(dis_marker)] + disintegration_data + content[dis_end_idx:]
+
+# 9. Write to index.html and template
 with open('index.html', 'w') as f:
     f.write(content)
 with open('index.template.html', 'w') as f:
