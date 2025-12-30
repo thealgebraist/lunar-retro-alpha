@@ -51,6 +51,7 @@ def main():
 
     pipe = get_flux()
 
+    # 1. Generate Location Images
     for name, prompt in locations.items():
         output_path = os.path.join(IMAGE_DIR, f"{name}.png")
         if os.path.exists(output_path):
@@ -62,7 +63,7 @@ def main():
         image = pipe(
             prompt,
             num_inference_steps=4,
-            guidance_scale=0.0, # Flux schnell doesn't use guidance scale
+            guidance_scale=0.0,
             width=1024,
             height=768,
             max_sequence_length=256
@@ -70,6 +71,38 @@ def main():
 
         image.save(output_path)
         print(f"Saved to {output_path}")
+
+    # 2. Generate Toilet Images (Mines Toilet Area)
+    # 1950s retro-futuristic style for all
+    toilet_prompts = {
+        "toilet_not_flushing": "1950s retro-futuristic lunar mine toilet, industrial metallic commode, cramped steel cubicle, grime and rust on walls, dim yellow lighting, cinematic sci-fi noir",
+        "toilet_lid_up": "1950s retro-futuristic lunar mine toilet with lid up, industrial metallic commode, cramped steel cubicle, dim yellow lighting, high detail",
+        "toilet_lid_down": "1950s retro-futuristic lunar mine toilet with lid down, industrial metallic commode, cramped steel cubicle, dim yellow lighting, high detail",
+        "toilet_stuffed": "1950s retro-futuristic lunar mine toilet stuffed with thick rolls of rough toilet paper, overflowing, industrial metallic commode, steel cubicle, grime, dramatic lighting",
+        "toilet_flooded": "1950s retro-futuristic lunar mine toilet area, water all over the grimy metal floor, reflections of dim lights in puddles, industrial metallic commode, leaking pipes, abandoned atmosphere"
+    }
+
+    for name, prompt in toilet_prompts.items():
+        output_path = os.path.join(IMAGE_DIR, f"{name}.png")
+        if not os.path.exists(output_path):
+            print(f"Generating Toilet Image: {name}...")
+            image = pipe(prompt, num_inference_steps=4, guidance_scale=0.0, width=1024, height=768).images[0]
+            image.save(output_path)
+
+    # 16 variations of flushing
+    for i in range(16):
+        name = f"toilet_flush_{i}"
+        output_path = os.path.join(IMAGE_DIR, f"{name}.png")
+        if os.path.exists(output_path):
+            continue
+        
+        print(f"Generating Toilet Flush Variation: {i}...")
+        # Add slight variation to the prompt or just use different seeds (implied by default generator)
+        flush_prompt = f"1950s retro-futuristic lunar mine toilet flushing with swirling water, industrial metallic commode, rapid water movement, bubbles, cramped steel cubicle, cinematic lighting, variation {i}"
+        image = pipe(flush_prompt, num_inference_steps=4, guidance_scale=0.0, width=1024, height=768).images[0]
+        image.save(output_path)
+
+    print("\nAll images generated successfully!")
 
 if __name__ == "__main__":
     main()
