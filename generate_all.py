@@ -12,8 +12,10 @@ try:
     from transformers import AutoProcessor, BarkModel
     try:
         from diffusers import TangoFluxPipeline
+        USE_DIFFUSERS_TANGO = True
     except ImportError:
-        from tangoflux import TangoFluxPipeline
+        from tangoflux import TangoFluxInference
+        USE_DIFFUSERS_TANGO = False
 except ImportError as e:
     print(f"Warning: Could not import some libraries: {e}")
     print("This script requires 'tangoflux' or 'diffusers>=0.31.0' and 'transformers'.")
@@ -34,7 +36,7 @@ if not os.path.exists(GAME_DIR):
 # Models
 bark_processor = None
 bark_model = None
-tango_pipe = None
+tango_model = None
 
 def get_bark():
     global bark_processor, bark_model
@@ -45,59 +47,67 @@ def get_bark():
     return bark_processor, bark_model
 
 def get_tango():
-    global tango_pipe
-    if tango_pipe is None:
+    global tango_model
+    if tango_model is None:
         print("Loading TangoFlux...")
-        tango_pipe = TangoFluxPipeline.from_pretrained("declare-lab/tango-flux", torch_dtype=TORCH_DTYPE).to(DEVICE)
-    return tango_pipe
-
-def gen_bark(text, filename, preset="v2/en_speaker_6"):
-    print(f"Generating Bark (Voice): {filename}...")
-    processor, model = get_bark()
-    inputs = processor(text, voice_preset=preset)
-    with torch.no_grad():
-        audio_array = model.generate(**inputs.to(DEVICE))
-        audio_array = audio_array.cpu().numpy().squeeze()
-    
-    wav_path = os.path.join(HQ_DIR, filename + ".wav")
-    scipy.io.wavfile.write(wav_path, rate=model.generation_config.sample_rate, data=audio_array)
-    return wav_path
+        if USE_DIFFUSERS_TANGO:
+            tango_model = TangoFluxPipeline.from_pretrained("declare-lab/TangoFlux", torch_dtype=TORCH_DTYPE).to(DEVICE)
+        else:
+            tango_model = TangoFluxInference(name="declare-lab/TangoFlux", device=DEVICE)
+    return tango_model
 
 def gen_tango(prompt, filename, duration=10.0, steps=25):
     print(f"Generating TangoFlux (SFX): {filename}...")
-    pipe = get_tango()
+    model = get_tango()
     
-    # TangoFlux typically uses duration in steps or a specific parameter
-    # For many diffusers pipelines it is 'audio_length_in_s'
-    # TangoFlux specifically might use 'duration' or similar depending on the implementation
-    audio = pipe(prompt, num_inference_steps=steps, duration=duration).audios[0]
+    if USE_DIFFUSERS_TANGO:
+        audio = model(prompt, num_inference_steps=steps, duration=duration).audios[0]
+    else:
+        # TangoFluxInference.generate returns a torch tensor [channels, samples]
+        audio_tensor = model.generate(prompt, steps=steps, duration=duration)
+        audio = audio_tensor.float().cpu().numpy()
+        # If it's [channels, samples], and we want [samples] or similar
+        if audio.ndim > 1:
+            # Most diffusers output is mono or interleaved? 
+            # TangoFlux output is usually [1, samples] or [2, samples]
+            # soundfile/scipy expects [samples, channels]
+            audio = audio.T
     
     # Normalize
+    # Calculate RMS on the numpy array
     rms = np.sqrt(np.mean(audio**2))
     target_rms = 10**(-18.0 / 20)
     if rms > 0:
         audio = audio * (target_rms / (rms + 1e-9))
     peak = np.max(np.abs(audio))
-    if peak > 0.95:
+    if peak > 0.95: 
         audio = audio * (0.95 / peak)
 
     # Loopable processing for long backgrounds
     if duration >= 10.0 and filename not in ["ending_synth", "backstory", "intro_synth"]:
-        sample_rate = 44100 # TangoFlux is usually high quality 44.1kHz
+        sample_rate = 44100 
         fade_samples = int(2.0 * sample_rate)
         if len(audio) > fade_samples * 2:
-            start_fade = audio[:fade_samples]
-            end_fade = audio[-fade_samples:]
-            middle = audio[fade_samples:-fade_samples]
-            alpha = np.linspace(0, 1, fade_samples)
-            blended = end_fade * (1 - alpha) + start_fade * alpha
-            audio = np.concatenate([blended, middle])
+            # Assuming mono for simplicity of blending logic if it was flattened or just take first channel
+            if audio.ndim > 1:
+                start_fade = audio[:fade_samples, :]
+                end_fade = audio[-fade_samples:, :]
+                middle = audio[fade_samples:-fade_samples, :]
+                alpha = np.linspace(0, 1, fade_samples)[:, np.newaxis]
+                blended = end_fade * (1 - alpha) + start_fade * alpha
+                audio = np.concatenate([blended, middle])
+            else:
+                start_fade = audio[:fade_samples]
+                end_fade = audio[-fade_samples:]
+                middle = audio[fade_samples:-fade_samples]
+                alpha = np.linspace(0, 1, fade_samples)
+                blended = end_fade * (1 - alpha) + start_fade * alpha
+                audio = np.concatenate([blended, middle])
 
     wav_path = os.path.join(HQ_DIR, filename + ".wav")
-    # TangoFlux output is usually 44100Hz
+    # TangoFlux output is 44100Hz
     scipy.io.wavfile.write(wav_path, rate=44100, data=(audio * 32767).astype(np.int16))
     return wav_path
-
 def convert_to_ogg(wav_path, ogg_name, quality=6):
     print(f"Converting to {ogg_name}.ogg...")
     ogg_path = os.path.join(GAME_DIR, ogg_name + ".ogg")
