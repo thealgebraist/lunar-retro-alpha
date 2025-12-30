@@ -33,7 +33,7 @@ setup_python:
 	@echo "Installing/Checking Python dependencies in $(VENV_DIR)..."
 	@$(VENV_PYTHON) -m pip install --upgrade pip
 	@$(VENV_PYTHON) -m pip install \
-		"torch>=2.4.0" \
+		"torch" \
 		"torchvision" \
 		"torchaudio" \
 		"diffusers>=0.31.0" \
@@ -48,7 +48,8 @@ setup_python:
 		"opencv-python" \
 		"moviepy" \
 		"tangoflux" \
-		"datasets"
+		"datasets" \
+		"google-generativeai"
 
 setup_zig:
 	@if [ ! -x "$(ZIG)" ]; then \
