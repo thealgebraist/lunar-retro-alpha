@@ -36,7 +36,7 @@ setup_python:
 		"torch" \
 		"torchvision" \
 		"torchaudio" \
-		"diffusers>=0.31.0" \
+		"diffusers>=0.32.0" \
 		"transformers>=4.44.0" \
 		"accelerate>=0.34.2" \
 		"huggingface-hub<1.0" \

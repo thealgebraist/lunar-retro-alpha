@@ -1,7 +1,13 @@
 import torch
 import os
 import sys
-from diffusers import LTXVideoPipeline
+try:
+    from diffusers import LTXVideoPipeline
+except ImportError:
+    print("LTXVideoPipeline not found in diffusers. Please upgrade diffusers to >= 0.32.0")
+    print("Trying to fallback to CogVideoXPipeline or exit...")
+    from diffusers import CogVideoXPipeline as LTXVideoPipeline # Fallback just to avoid NameError if possible
+
 from diffusers.utils import export_to_video
 from typing import Final, List
 import numpy as np
