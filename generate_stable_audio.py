@@ -7,7 +7,7 @@ def generate_audio(prompt, negative_prompt="Low quality, static, noise, distorte
     print(f"Loading Stable Audio Open 1.0...")
     
     # Use MPS if on Apple Silicon, otherwise CPU (Stable Audio Open usually requires float32 on MPS)
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     torch_dtype = torch.float32 # MPS often prefers float32 for these specific pipelines
     
     pipe = StableAudioPipeline.from_pretrained(

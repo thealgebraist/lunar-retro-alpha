@@ -13,7 +13,7 @@ from transformers import GPT2Model
 
 def main():
     model_id = "cvssp/audioldm2-large"
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     print(f"Loading {model_id} on {device}...")
     
     # Workaround for GPT2Model vs GPT2LMHeadModel issue
