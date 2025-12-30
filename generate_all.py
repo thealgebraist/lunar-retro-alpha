@@ -84,9 +84,9 @@ def gen_tango(prompt, filename, duration=10.0, steps=25):
         audio = audio * (0.95 / peak)
 
     # Loopable processing for long backgrounds
-    if duration >= 10.0 and filename not in ["ending_synth", "backstory", "intro_synth"]:
+    if duration >= 15.0 and filename not in ["ending_synth", "backstory", "intro_synth"]:
         sample_rate = 44100 
-        fade_samples = int(2.0 * sample_rate)
+        fade_samples = int(4.0 * sample_rate) # Use 4s fade for smoother 30s loops
         if len(audio) > fade_samples * 2:
             # Assuming mono for simplicity of blending logic if it was flattened or just take first channel
             if audio.ndim > 1:
@@ -242,7 +242,7 @@ def main():
     # Generation Execution
     # SFX - TangoFlux
     for name, prompt in backgrounds.items():
-        wav = gen_tango(prompt, name, duration=10.0)
+        wav = gen_tango(prompt, name, duration=30.0)
         convert_to_ogg(wav, name)
 
     for name, prompt in triggers.items():
