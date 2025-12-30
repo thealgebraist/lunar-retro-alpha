@@ -30,7 +30,7 @@ def get_flux():
 
 def main():
     locations = {
-        "observation_dome": "1950s retro-futuristic space station observation dome, massive circular reinforced glass windows looking out at a barren cratered moon surface, starry black space, eerie dramatic lighting, cinematic, high detail, masterpiece",
+        "observation_dome": "Empty 1950s retro-futuristic space station observation dome, no people, massive circular reinforced glass windows looking out at a barren cratered moon surface, starry black space, eerie dramatic lighting, cinematic, high detail, masterpiece",
         "comms_array": "Retro-futuristic 1950s radio communication room, walls of buzzing vacuum tube cabinets, glowing dials, mechanical teletype machines, thick cables on floor, industrial sci-fi, cinematic",
         "security_hub": "1950s sci-fi security control room, flickering CRT monitors, banks of clicking relay switches, heavy steel furniture, dimly lit with red emergency lights, retro-tech",
         "elevator_lobby_alpha": "Grand industrial elevator lobby in a moon base, 1950s brutalist architecture, heavy brass elevator doors, flickering fluorescent lights, shadows, cinematic film noir",
@@ -44,8 +44,9 @@ def main():
         "maintenance_tunnels": "Cramped dark industrial maintenance tunnel, steam escaping from pipes, scuttling shadows, rusted metal gratings, 1950s retro-futuristic boiler room",
         "cargo_loading": "Large moon base cargo hangar, massive blast doors, heavy lifting cranes, crates with radioactive symbols, 1950s sci-fi warehouse",
         "oxygen_scrubbers": "Life support room with giant gurgling liquid vats, rhythmic mechanical bellows, pipes and valves, humid atmosphere, 1950s retro-tech",
-        "launch_control": "Tense 1950s rocket launch control center, countdown clock with glowing nixie tubes, radar screens, frantic mechanical clicking, cinematic masterpiece",
+        "launch_control": "Empty and abandoned 1950s lunar launch control center, no people, dusty consoles with glowing nixie tubes, radar screens, an intricate miniature model of an escape pod on a central table, dramatic lighting, cinematic masterpiece",
         "escape_pod": "Interior of a small 1950s escape pod, padded circular walls, many toggle switches and analog gauges, single flickering light, claustrophobic",
+        "main_reactor": "Interior of a moon base power station, a massive thick lead-glass window looking into a deep pool of glowing blue water, the submerged nuclear reactor core emits a steady sapphire Cherenkov glow, no sparks, silent and powerful, cinematic industrial sci-fi",
         "elevator_death": "Sorrowful 1950s sci-fi scene, an abandoned spacesuit in a lonely lunar corridor, fading light, peaceful but tragic cinematic ending"
     }
 
