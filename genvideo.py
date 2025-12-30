@@ -27,8 +27,6 @@ def build_pipeline(model_id: str) -> CogVideoXPipeline:
 
     # Enable CPU offloading and VAE optimizations for memory efficiency
     pipe.enable_model_cpu_offload()
-    pipe.vae.enable_slicing()
-    pipe.vae.enable_tiling()
 
     return pipe
 
@@ -46,10 +44,14 @@ def export_video_moviepy(frames: List[np.ndarray], output_path: str, fps: int = 
     """
     Exports the video using MoviePy instead of OpenCV.
     """
-    # CogVideoX returns a list of PIL images or numpy arrays.
-    # MoviePy ImageSequenceClip works well with numpy arrays (RGB).
-    clip = ImageSequenceClip(frames, fps=fps)
-    clip.write_videofile(output_path, codec="libx264", audio=False)
+    try:
+        # CogVideoX returns a list of PIL images or numpy arrays.
+        # MoviePy ImageSequenceClip works well with numpy arrays (RGB).
+        clip = ImageSequenceClip(frames, fps=fps)
+        clip.write_videofile(output_path, codec="libx264", audio=False)
+    except Exception as e:
+        print(f"Error during video export: {e}")
+        print("Note: The binary backup was already saved successfully.")
 
 def generate_adventure_video(
     pipe: CogVideoXPipeline,
