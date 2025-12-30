@@ -172,6 +172,7 @@ const GameState = struct {
     rumble_timer: f32 = 0.0,
     rumble_active: bool = false,
     rumble_stage: u8 = 0, // 0: inactive, 1: playing rumble, 2: playing reaction
+    toilet_flush_index: u8 = 0,
 
     fn hasItem(self: *GameState, item: Item) bool {
         return self.inventory[@intFromEnum(item)];
@@ -748,13 +749,15 @@ export fn onCommand(len: usize) void {
         } else jsPrint("Nothing to push here.\n");
     } else if (std.mem.eql(u8, cmd, "flush")) {
         if (state.current_loc == .toilet_room) {
-            // Random flush sound 0-7 using LCG
-            const seed = @as(usize, @intFromFloat(randomFloat() * 8.0)) % 8;
-            const s = switch(seed) {
+            // Cycle flush sounds 0-7
+            const idx = state.toilet_flush_index;
+            const s = switch(idx) {
                 0 => assets.toilet_flush_0, 1 => assets.toilet_flush_1, 2 => assets.toilet_flush_2, 3 => assets.toilet_flush_3,
                 4 => assets.toilet_flush_4, 5 => assets.toilet_flush_5, 6 => assets.toilet_flush_6, 7 => assets.toilet_flush_7,
                 else => assets.toilet_flush_0
             };
+            state.toilet_flush_index = (state.toilet_flush_index + 1) % 8;
+            
             playSound(s.ptr, s.len, false);
             jsPrint("WHOOSH! You flush the toilet.\n");
         } else jsPrint("No toilet here.\n");
