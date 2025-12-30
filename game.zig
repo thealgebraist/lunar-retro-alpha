@@ -71,7 +71,13 @@ const assets = struct {
     const reaction_4 = @embedFile("moon_base_assets/reaction_4.ogg");
     const reaction_5 = @embedFile("moon_base_assets/reaction_5.ogg");
     const reaction_6 = @embedFile("moon_base_assets/reaction_6.ogg");
-    const evacuate_announcement = @embedFile("moon_base_assets/evacuate_announcement.ogg");
+    const announcement_0 = @embedFile("moon_base_assets/announcement_0.ogg");
+    const announcement_1 = @embedFile("moon_base_assets/announcement_1.ogg");
+    const announcement_2 = @embedFile("moon_base_assets/announcement_2.ogg");
+    const announcement_3 = @embedFile("moon_base_assets/announcement_3.ogg");
+    const announcement_4 = @embedFile("moon_base_assets/announcement_4.ogg");
+    const announcement_5 = @embedFile("moon_base_assets/announcement_5.ogg");
+    const announcement_6 = @embedFile("moon_base_assets/announcement_6.ogg");
 
     const lever_clonk = @embedFile("moon_base_assets/lever_clonk.ogg");
     const lever_bad_0 = @embedFile("moon_base_assets/lever_bad_0.ogg");
@@ -173,6 +179,7 @@ const GameState = struct {
     rumble_active: bool = false,
     rumble_stage: u8 = 0, // 0: inactive, 1: playing rumble, 2: playing reaction
     toilet_flush_index: u8 = 0,
+    current_announcement_index: u8 = 0,
 
     fn hasItem(self: *GameState, item: Item) bool {
         return self.inventory[@intFromEnum(item)];
@@ -216,8 +223,6 @@ export fn getTapeClickPtr() [*]const u8 { return assets.tape_click.ptr; }
 export fn getTapeClickLen() usize { return assets.tape_click.len; }
 export fn getTapeLogPtr() [*]const u8 { return assets.tape_log.ptr; }
 export fn getTapeLogLen() usize { return assets.tape_log.len; }
-export fn getEvacuateAnnouncementPtr() [*]const u8 { return assets.evacuate_announcement.ptr; }
-export fn getEvacuateAnnouncementLen() usize { return assets.evacuate_announcement.len; }
 
 export fn getAlienActive() bool { return state.alien_active; }
 export fn getAlienPos() u8 { return @intFromEnum(state.alien_pos); }
@@ -268,8 +273,32 @@ export fn tickWithSeed(dt: f32, seed: u32) void {
     if (state.announcement_timer >= 90.0) {
         state.announcement_timer = 0.0;
         if (@intFromEnum(state.current_loc) <= 15) {
-            playSound(assets.evacuate_announcement.ptr, assets.evacuate_announcement.len, false);
-            jsPrint("\n[ INTERCOM: \"Evacuate the station. Oxygen level low.\" ]\n");
+            const idx = state.current_announcement_index;
+            const sound = switch (idx) {
+                0 => assets.announcement_0,
+                1 => assets.announcement_1,
+                2 => assets.announcement_2,
+                3 => assets.announcement_3,
+                4 => assets.announcement_4,
+                5 => assets.announcement_5,
+                6 => assets.announcement_6,
+                else => assets.announcement_0,
+            };
+            const text = switch (idx) {
+                0 => "Evacuate the station. Oxygen level low.",
+                1 => "This area is off limits.",
+                2 => "Alert! Station integrity compromised.",
+                3 => "Station running on backup power, please restart generator to survive.",
+                4 => "Keep in mind that the radioactivity level rising.",
+                5 => "The mining area is off limits.",
+                6 => "Proceed to the escape pod.",
+                else => "...",
+            };
+            playSound(sound.ptr, sound.len, false);
+            jsPrint("\n[ INTERCOM: \"");
+            jsPrint(text);
+            jsPrint("\" ]\n");
+            state.current_announcement_index = (idx + 1) % 7;
         }
     }
 
@@ -629,7 +658,7 @@ fn changeLocation(id: LocationId) void {
             jsPrint("[ HINT: You can 'push button' to descend. ]\n");
         }
     }
-    if (id == .work_room) jsPrint("[ HINT: You can 'play tape', 'rewind tape', or 'open drawer' here. ]\n");
+    if (id == .work_room) jsPrint("[ HINT: You can 'play tape', 'rewind tape', 'open drawer', or 'look picture'. ]\n");
     if (id == .toilet_room) jsPrint("[ HINT: You can 'flush' the toilet. ]\n");
     if (id == .crusher_room) jsPrint("[ HINT: You can try to 'start machine'. ]\n");
     if (id == .bunk_room) jsPrint("[ HINT: You can 'sleep' or 'read'. ]\n");
@@ -641,7 +670,8 @@ fn changeLocation(id: LocationId) void {
     }
 }
 
-export fn init() void {
+export fn init(seed: u32) void {
+    rng_state = seed;
     state.items_at_loc[@intFromEnum(LocationId.comms_array)] = .control_board;
     state.items_at_loc[@intFromEnum(LocationId.sleeping_pods)] = .battery;
     
@@ -835,6 +865,10 @@ export fn onCommand(len: usize) void {
                 }
             } else jsPrint("Push what?\n");
         } else jsPrint("Nothing to push here.\n");
+    } else if (std.mem.eql(u8, cmd, "close") and arg != null and std.mem.eql(u8, arg.?, "drawer")) {
+        if (state.current_loc == .work_room) {
+            jsPrint("The drawer is rusty and stuck open.\n");
+        } else jsPrint("No drawer here.\n");
     } else if (std.mem.eql(u8, cmd, "open") and arg != null and std.mem.eql(u8, arg.?, "drawer")) {
         if (state.current_loc == .work_room) {
             playSound(assets.drawer_open.ptr, assets.drawer_open.len, false);
