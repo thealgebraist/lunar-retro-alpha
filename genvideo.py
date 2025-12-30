@@ -2,7 +2,7 @@ import torch
 import os
 from diffusers import CogVideoXPipeline
 from typing import Final, List
-from moviepy.editor import ImageSequenceClip
+from moviepy import ImageSequenceClip
 import numpy as np
 
 # Constants for the 3090 optimization
