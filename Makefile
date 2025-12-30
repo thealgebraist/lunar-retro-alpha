@@ -49,7 +49,8 @@ setup_python:
 		"moviepy" \
 		"tangoflux" \
 		"datasets" \
-		"google-genai"
+		"google-genai" \
+		"runwayml"
 
 setup_zig:
 	@if [ ! -x "$(ZIG)" ]; then \
