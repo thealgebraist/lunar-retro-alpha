@@ -1,23 +1,17 @@
+import torch
 import os
 import sys
-import time
-from typing import Final, Optional
-from runwayml import RunwayML
+from diffusers import LTXVideoPipeline
+from diffusers.utils import export_to_video
+from typing import Final, List
+import numpy as np
 
 # Add local libs
 sys.path.insert(0, os.path.abspath("local_libs"))
 
-# Configure API Key
-API_KEY = os.environ.get("RUNWAYML_API_SECRET")
-if not API_KEY:
-    try:
-        with open("runway_api_key.txt", "r") as f:
-            API_KEY = f.read().strip()
-    except FileNotFoundError:
-        pass
-
 # Constants
-MODEL_NAME: Final[str] = "gen4_turbo"
+DEVICE: Final[str] = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+MODEL_ID: Final[str] = "Lightricks/LTX-Video"
 PROMPT: Final[str] = (
     "A cinematic, high-detail wide shot of a derelict 1950s-style moon base. "
     "The base consists of rusted chrome domes and retro-futuristic antennas. "
@@ -26,73 +20,68 @@ PROMPT: Final[str] = (
     "Lunar dust kicks up in the foreground. High contrast, 35mm film grain, sci-fi noir."
 )
 
-def generate_runway_video(prompt: str, output_path: str) -> Optional[str]:
+def build_pipeline(model_id: str) -> LTXVideoPipeline:
     """
-    Generates a video using Runway Gen-4 Turbo.
+    Initializes the LTX-Video pipeline with optimizations.
     """
-    if not API_KEY:
-        print("Error: RUNWAYML_API_SECRET is required for Runway generation.")
-        return None
+    print(f"Loading {model_id} onto {DEVICE}...")
+    dtype = torch.bfloat16 if DEVICE == "cuda" else torch.float32
+    
+    pipe = LTXVideoPipeline.from_pretrained(
+        model_id,
+        torch_dtype=dtype
+    )
 
-    print(f"Initializing RunwayML client...")
-    client = RunwayML(api_key=API_KEY)
-
-    print(f"Starting video generation for prompt: {prompt}")
-    try:
-        # Submit the generation request
-        # Runway Gen-4 Turbo typically uses image_to_video or similar depending on exact SDK
-        # For text-to-video, check supported methods
-        task = client.image_to_video.create(
-            model=MODEL_NAME,
-            prompt_text=prompt,
-            # Note: For pure text-to-video, some SDKs might use different endpoints
-            # but Gen-4 Turbo often excels with image prompts.
-        )
+    if DEVICE == "cuda":
+        pipe.enable_model_cpu_offload()
+    else:
+        pipe.to(DEVICE)
         
-        task_id = task.id
-        print(f"Generation task started. ID: {task_id}")
-        print("Waiting for video generation to complete...")
-        
-        # Poll for completion
-        while True:
-            task = client.tasks.retrieve(task_id)
-            status = task.status
-            print(f"Task status: {status}")
-            
-            if status == "SUCCEEDED":
-                print("Video generation complete!")
-                video_url = task.output[0]
-                print(f"Video URL: {video_url}")
-                
-                # Save metadata
-                with open(output_path.replace(".mp4", ".metadata.txt"), "w") as f:
-                    f.write(str(task))
-                
-                # Download logic would go here
-                return output_path
-            elif status == "FAILED":
-                print(f"Task failed: {task.error}")
-                return None
-            
-            time.sleep(10)
+    return pipe
 
-    except Exception as e:
-        print(f"Error during Runway generation: {e}")
-        return None
+def generate_ltx_video(
+    pipe: LTXVideoPipeline,
+    prompt: str,
+    output_path: str,
+    seed: int = 42
+) -> str:
+    """
+    Generates a video using LTX-Video.
+    """
+    generator = torch.Generator(device=DEVICE).manual_seed(seed)
+
+    print(f"Starting generation for prompt: {prompt}")
+    
+    output = pipe(
+        prompt=prompt,
+        negative_prompt="low quality, worst quality, deformed, distorted, grainy, noise, blurry",
+        num_frames=161,
+        width=768,
+        height=512,
+        num_inference_steps=50,
+        guidance_scale=3.0,
+        generator=generator,
+    ).frames[0]
+
+    print(f"Exporting video to {output_path}...")
+    export_to_video(output, output_path, fps=24)
+    
+    backup_path = output_path.replace(".mp4", ".bin")
+    torch.save(output, backup_path)
+    print(f"Binary backup saved to: {backup_path}")
+
+    return output_path
 
 def main() -> None:
-    if not API_KEY:
-        print("Please set the RUNWAYML_API_SECRET environment variable or create runway_api_key.txt")
-        return
-
     output_filename = "moon_base_cinematic.mp4"
-    print("Starting generation using Runway Gen-4 Turbo...")
-    result_path = generate_runway_video(PROMPT, output_filename)
+    pipeline = build_pipeline(MODEL_ID)
 
-    if result_path:
-        print(f"Process complete. Metadata saved for: {result_path}")
-    else:
-        print("Generation failed.")
+    print("Starting generation. This may take several minutes...")
+    try:
+        result_path = generate_ltx_video(pipeline, PROMPT, output_filename)
+        print(f"Process complete. Video: {result_path}")
+    except Exception as e:
+        print(f"Error during LTX-Video generation: {e}")
 
 if __name__ == "__main__":
     main()
