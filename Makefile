@@ -18,7 +18,7 @@ ASSET_DIR := moon_base_assets
 WASM_TARGET := game.wasm
 WASM_B64 := game.wasm.base64
 
-.PHONY: all build clean gensamples genimages genvideo setup_tools setup_zig setup_ffmpeg setup_python
+.PHONY: all build clean gensamples genimages genvideo genhistory setup_tools setup_zig setup_ffmpeg setup_python
 
 all: build
 
@@ -85,6 +85,9 @@ genimages: setup_tools
 
 genvideo: setup_tools
 	$(VENV_PYTHON) genvideo.py
+
+genhistory: setup_tools
+	$(VENV_PYTHON) generate_history_tapes.py
 
 clean:
 	rm -f $(WASM_TARGET) $(WASM_B64) game.wasm.o backstory_frames.json
