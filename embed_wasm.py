@@ -8,6 +8,9 @@ with open('game.wasm.base64', 'r') as f:
 with open('backstory_frames.json', 'r') as f:
     frames_data = f.read().strip()
 
+with open('airlock_frames.json', 'r') as f:
+    airlock_data = f.read().strip()
+
 # 3. Read the template
 with open('index.template.html', 'r') as f:
     content = f.read()
@@ -19,7 +22,7 @@ start_idx = content.find(start_marker)
 end_idx = content.find(end_marker, start_idx + len(start_marker))
 content = content[:start_idx + len(start_marker)] + b64_data + content[end_idx:]
 
-# 5. Replace Animation Data (I need to add this marker to the template first)
+# 5. Replace Animation Data
 anim_marker = 'const ANIMATION_DATA = '
 anim_end = ';'
 a_start = content.find(anim_marker)
@@ -27,7 +30,15 @@ a_end = content.find(anim_end, a_start + len(anim_marker))
 if a_start != -1:
     content = content[:a_start + len(anim_marker)] + frames_data + content[a_end:]
 
-# 6. Write to index.html and template
+# 6. Replace Airlock Animation Data
+air_marker = 'const AIRLOCK_ANIMATION_DATA = '
+air_end = ';'
+air_start = content.find(air_marker)
+air_end_idx = content.find(air_end, air_start + len(air_marker))
+if air_start != -1:
+    content = content[:air_start + len(air_marker)] + airlock_data + content[air_end_idx:]
+
+# 7. Write to index.html and template
 with open('index.html', 'w') as f:
     f.write(content)
 with open('index.template.html', 'w') as f:

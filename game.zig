@@ -170,6 +170,7 @@ const GameState = struct {
     tape_rewound: bool = false,
     lever_pulled: bool = false,
     elevator_level: u8 = 0, // 0: Top, 1: Bottom (Mine)
+    shuttle_code: [4]u8 = [_]u8{0,0,0,0},
 
     // Alien State
     alien_active: bool = false,
@@ -624,11 +625,25 @@ fn changeLocation(id: LocationId) void {
             jsPrint("[ HINT: The doors are open. You can 'enter' the elevator. ]\n");
         }
     }
-    if (id == .elevator_interior and !state.elevator_moving_down) jsPrint("[ HINT: You can 'push button' to descend. ]\n");
-    if (id == .work_room) jsPrint("[ HINT: You can 'play tape' or 'rewind tape' here. ]\n");
+    if (id == .elevator_interior and !state.elevator_moving_down) {
+        if (state.elevator_level == 1) {
+            jsPrint("[ HINT: You can 'push button' to ascend. ]\n");
+        } else {
+            jsPrint("[ HINT: You can 'push button' to descend. ]\n");
+        }
+    }
+    if (id == .work_room) jsPrint("[ HINT: You can 'play tape', 'rewind tape', or 'open drawer' here. ]\n");
     if (id == .toilet_room) jsPrint("[ HINT: You can 'flush' the toilet. ]\n");
     if (id == .crusher_room) jsPrint("[ HINT: You can try to 'start machine'. ]\n");
     if (id == .bunk_room) jsPrint("[ HINT: You can 'sleep' or 'read'. ]\n");
+
+    // Missing part hints
+    if (id == .main_reactor and !state.reactor_powered) jsPrint("The reactor control panel has an empty slot labeled 'POWER BOARD C'.\n");
+    if (id == .launch_control and !state.launch_computer_active) jsPrint("The launch computer is lifeless. A slot marked 'CONTROL BOARD B' is empty.\n");
+    if (id == .escape_pod and !state.pod_interface_ready) jsPrint("The pod's nav system is offline. It looks like it's missing 'INTERFACE BOARD D'.\n");
+    if (id == .escape_pod and state.pod_interface_ready and state.batteries_inserted < 1) {
+        jsPrint("The battery bank is empty. It requires 1 High-Capacity Battery.\n");
+    }
 }
 
 export fn init() void {
@@ -640,6 +655,13 @@ export fn init() void {
     state.items_at_loc[@intFromEnum(LocationId.medical_lab)] = .battery_2;
     state.items_at_loc[@intFromEnum(LocationId.battery_bank)] = .battery_3;
     state.items_at_loc[@intFromEnum(LocationId.cargo_loading)] = .battery_4;
+    
+    // Generate shuttle code
+    state.shuttle_code[0] = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+    state.shuttle_code[1] = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+    state.shuttle_code[2] = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+    state.shuttle_code[3] = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
+
     jsPrint("Welcome to Lunar Retro-Alpha.\nEscape the 1955 Moon Base.\n");
     changeLocation(.observation_dome);
 }
@@ -739,7 +761,7 @@ export fn onCommand(len: usize) void {
     } else if (std.mem.eql(u8, cmd, "flush")) {
         if (state.current_loc == .toilet_room) {
             // Random flush sound 0-7 using LCG
-            const seed = @as(usize, @intFromFloat(randomFloat() * 8.0));
+            const seed = @as(usize, @intFromFloat(randomFloat() * 8.0)) % 8;
             const s = switch(seed) {
                 0 => assets.toilet_flush_0, 1 => assets.toilet_flush_1, 2 => assets.toilet_flush_2, 3 => assets.toilet_flush_3,
                 4 => assets.toilet_flush_4, 5 => assets.toilet_flush_5, 6 => assets.toilet_flush_6, 7 => assets.toilet_flush_7,
@@ -779,58 +801,55 @@ export fn onCommand(len: usize) void {
              jsPrint("Rewinding tape...\n");
              state.tape_rewound = true;
         } else jsPrint("Nothing to rewind here.\n");
-    } else if (std.mem.eql(u8, cmd, "pull") or (std.mem.eql(u8, cmd, "push") and arg != null and std.mem.eql(u8, arg.?, "lever"))) {
+    } else if (std.mem.eql(u8, cmd, "pull")) {
         if (state.current_loc == .mine_storage) {
-            playSound(assets.lever_clonk.ptr, assets.lever_clonk.len, false);
-            state.lever_pulled = !state.lever_pulled;
-
-            if (state.lever_pulled) {
-                // Lights out
-                jsPrint("KLONK. The lights flicker and die. Total darkness engulfs the mine.\n");
-                
-                // Play random bad reaction
-                const seed = @as(usize, @intFromFloat(randomFloat() * 4.0));
-                const s = switch(seed) {
-                    0 => assets.lever_bad_0, 1 => assets.lever_bad_1, 2 => assets.lever_bad_2, 3 => assets.lever_bad_3, else => assets.lever_bad_0
-                };
-                // Delay slightly for effect? No, just play.
-                playSound(s.ptr, s.len, false);
-                
-                const txt = switch(seed) {
-                    0 => "Uh oh.", 1 => "That wasn't good.", 2 => "...", 3 => "What happened to the lights?", else => "..."
-                };
-                jsPrint("YOU: \""); jsPrint(txt); jsPrint("\"\n");
-
-            } else {
-                // Lights on
-                jsPrint("KLONK. A generator hums to life. The lights flicker back on.\n");
-                playSound(assets.reactor_ignition_roar.ptr, assets.reactor_ignition_roar.len, false); // Reuse hum
-
-                // Play random good reaction
-                const seed = @as(usize, @intFromFloat(randomFloat() * 3.0));
-                const s = switch(seed) {
-                    0 => assets.lever_good_0, 1 => assets.lever_good_1, 2 => assets.lever_good_2, else => assets.lever_good_0
-                };
-                playSound(s.ptr, s.len, false);
-
-                const txt = switch(seed) {
-                    0 => "That's better.", 1 => "Alright.", 2 => "Much better.", else => "..."
-                };
-                jsPrint("YOU: \""); jsPrint(txt); jsPrint("\"\n");
-            }
-        } else jsPrint("No lever here.\n");
+            if (arg != null and std.mem.eql(u8, arg.?, "lever")) {
+                if (state.lever_pulled) {
+                    jsPrint("The lever is already pulled down. The lights are off.\n");
+                } else {
+                    playSound(assets.lever_clonk.ptr, assets.lever_clonk.len, false);
+                    state.lever_pulled = true;
+                    jsPrint("KLONK. The lights flicker and die. Total darkness engulfs the mine.\n");
+                    const seed = @as(usize, @intFromFloat(randomFloat() * 4.0));
+                    const s = switch(seed) {
+                        0 => assets.lever_bad_0, 1 => assets.lever_bad_1, 2 => assets.lever_bad_2, 3 => assets.lever_bad_3, else => assets.lever_bad_0
+                    };
+                    playSound(s.ptr, s.len, false);
+                    const txt = switch(seed) {
+                        0 => "Uh oh.", 1 => "That wasn't good.", 2 => "...", 3 => "What happened to the lights?", else => "..."
+                    };
+                    jsPrint("YOU: \""); jsPrint(txt); jsPrint("\"\n");
+                }
+            } else jsPrint("Pull what?\n");
+        } else jsPrint("Nothing to pull here.\n");
+    } else if (std.mem.eql(u8, cmd, "push")) {
+        if (state.current_loc == .mine_storage) {
+            if (arg != null and std.mem.eql(u8, arg.?, "lever")) {
+                if (!state.lever_pulled) {
+                    jsPrint("The lever is already pushed up. The lights are on.\n");
+                } else {
+                    playSound(assets.lever_clonk.ptr, assets.lever_clonk.len, false);
+                    state.lever_pulled = false;
+                    jsPrint("KLONK. A generator hums to life. The lights flicker back on.\n");
+                    playSound(assets.reactor_ignition_roar.ptr, assets.reactor_ignition_roar.len, false);
+                    const seed = @as(usize, @intFromFloat(randomFloat() * 3.0));
+                    const s = switch(seed) {
+                        0 => assets.lever_good_0, 1 => assets.lever_good_1, 2 => assets.lever_good_2, else => assets.lever_good_0
+                    };
+                    playSound(s.ptr, s.len, false);
+                    const txt = switch(seed) {
+                        0 => "That's better.", 1 => "Alright.", 2 => "Much better.", else => "..."
+                    };
+                    jsPrint("YOU: \""); jsPrint(txt); jsPrint("\"\n");
+                }
+            } else jsPrint("Push what?\n");
+        } else jsPrint("Nothing to push here.\n");
     } else if (std.mem.eql(u8, cmd, "open") and arg != null and std.mem.eql(u8, arg.?, "drawer")) {
         if (state.current_loc == .work_room) {
             playSound(assets.drawer_open.ptr, assets.drawer_open.len, false);
-            // Generate random 4-letter code
-            const l1 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
-            const l2 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
-            const l3 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
-            const l4 = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
             jsPrint("You slide the drawer open. Inside is a manual: 'Operating the Express48 Type B Mining Shuttle'.\n");
             jsPrint("Handwritten on the cover is a code: ");
-            const code = [_]u8{l1, l2, l3, l4};
-            jsPrint(&code); jsPrint("\n");
+            jsPrint(&state.shuttle_code); jsPrint("\n");
         } else jsPrint("No drawer here.\n");
     } else if (std.mem.eql(u8, cmd, "look") and arg != null and std.mem.eql(u8, arg.?, "picture")) {
         if (state.current_loc == .work_room) {
@@ -848,7 +867,11 @@ export fn onCommand(len: usize) void {
         const item = if (@intFromEnum(state.current_loc) < 17) state.items_at_loc[@intFromEnum(state.current_loc)] else null;
         if (item) |_| { jsPrint(getLoc(state.current_loc).item_description); jsPrint("\n"); }
         else jsPrint("There's nothing here to examine closely.\n");
-    } else if (std.mem.eql(u8, cmd, "go") or std.mem.eql(u8, cmd, "n") or std.mem.eql(u8, cmd, "s") or std.mem.eql(u8, cmd, "e") or std.mem.eql(u8, cmd, "w") or std.mem.eql(u8, cmd, "u") or std.mem.eql(u8, cmd, "d")) {
+    } else if (std.mem.eql(u8, cmd, "go") or std.mem.eql(u8, cmd, "n") or std.mem.eql(u8, cmd, "s") or std.mem.eql(u8, cmd, "e") or std.mem.eql(u8, cmd, "w") or std.mem.eql(u8, cmd, "u") or std.mem.eql(u8, cmd, "d") or std.mem.eql(u8, cmd, "north") or std.mem.eql(u8, cmd, "south") or std.mem.eql(u8, cmd, "east") or std.mem.eql(u8, cmd, "west") or std.mem.eql(u8, cmd, "up") or std.mem.eql(u8, cmd, "down")) {
+        if (state.lever_pulled and @intFromEnum(state.current_loc) >= 17) {
+            jsPrint("It's too dark to see where you're going! You need to turn the lights back on.\n");
+            return;
+        }
         const dir_str = if (std.mem.eql(u8, cmd, "go")) (arg orelse { jsPrint("Go where?\n"); return; }) else cmd;
         const loc = getLoc(state.current_loc);
         const next_id: ?LocationId = if (std.mem.eql(u8, dir_str, "north") or std.mem.eql(u8, dir_str, "n")) loc.n
@@ -894,23 +917,22 @@ export fn onCommand(len: usize) void {
         }
         if (!handled and (std.mem.eql(u8, target, "battery") or std.mem.eql(u8, target, ""))) {
             if (loc == .escape_pod) {
-                if (!state.launch_computer_active) jsPrint("The battery slots are locked until the Launch Computer is powered.\n")
+                if (!state.launch_computer_active) jsPrint("The battery slot is locked until the Launch Computer is powered.\n")
                 else {
                     const batteries = [_]Item{ .battery_1, .battery_2, .battery_3, .battery_4 };
                     for (batteries) |b| {
                         if (state.hasItem(b)) {
                             state.setItem(b, false); state.batteries_inserted += 1;
                             playSound(assets.battery_insert.ptr, assets.battery_insert.len, false);
-                            jsPrint("Battery installed. Total: ");
-                            const count_str = [_]u8{ @as(u8, @intCast(state.batteries_inserted)) + '0' };
-                            jsPrint(&count_str); jsPrint("/4\n"); handled = true; break;
+                            jsPrint("Battery installed. Systems charging...\n");
+                            handled = true; break;
                         }
                     }
                 }
             }
         }
         if (!handled) jsPrint("Nothing to install here or you're missing the required part.\n");
-        if (state.pod_interface_ready and state.batteries_inserted == 4) {
+        if (state.pod_interface_ready and state.batteries_inserted >= 1) {
             state.game_over = true;
             jsPrint("\n*** ALL SYSTEMS GO! ***\n");
             jsPrint("You strap in and hit the launch button. The pod blasts off toward Earth!\n\n");
