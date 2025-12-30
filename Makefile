@@ -49,7 +49,7 @@ setup_python:
 		"moviepy" \
 		"tangoflux" \
 		"datasets" \
-		"google-generativeai"
+		"google-genai"
 
 setup_zig:
 	@if [ ! -x "$(ZIG)" ]; then \
