@@ -64,6 +64,11 @@ def get_tango():
     return tango_model
 
 def gen_bark(text, filename, preset="v2/en_speaker_6", target_dir=HQ_DIR):
+    wav_path = os.path.join(target_dir, filename + ".wav")
+    if os.path.exists(wav_path):
+        print(f"Skipping Bark generation: {filename} (already exists)")
+        return wav_path
+
     print(f"Generating Bark (Voice): {filename} in {target_dir}...")
     processor, model = get_bark()
     inputs = processor(text, voice_preset=preset)
@@ -71,11 +76,15 @@ def gen_bark(text, filename, preset="v2/en_speaker_6", target_dir=HQ_DIR):
         audio_array = model.generate(**inputs.to(DEVICE))
         audio_array = audio_array.cpu().numpy().squeeze()
     
-    wav_path = os.path.join(target_dir, filename + ".wav")
     scipy.io.wavfile.write(wav_path, rate=model.generation_config.sample_rate, data=audio_array)
     return wav_path
 
 def gen_tango(prompt, filename, duration=10.0, steps=25):
+    wav_path = os.path.join(HQ_DIR, filename + ".wav")
+    if os.path.exists(wav_path):
+        print(f"Skipping TangoFlux generation: {filename} (already exists)")
+        return wav_path
+
     print(f"Generating TangoFlux (SFX): {filename}...")
     model = get_tango()
     
@@ -123,7 +132,6 @@ def gen_tango(prompt, filename, duration=10.0, steps=25):
                 blended = end_fade * (1 - alpha) + start_fade * alpha
                 audio = np.concatenate([blended, middle])
 
-    wav_path = os.path.join(HQ_DIR, filename + ".wav")
     # TangoFlux output is 44100Hz
     scipy.io.wavfile.write(wav_path, rate=44100, data=(audio * 32767).astype(np.int16))
     return wav_path
@@ -135,16 +143,13 @@ def convert_to_ogg(wav_path, ogg_name, quality=6, target_dir=GAME_DIR):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def mix_tape_log():
-    print("Mixing Tape Log...")
-    # Generate Voice
-    voice_path = gen_bark(
-        "[sigh] Log entry 4-1-2. We were hit. That meteor shower... it came out of nowhere. [pause] Hull breach in sector 7. Things went downhill fast. Life support is failing. [static] Everyone... disappeared into the tunnels. I'm the only one left.", 
-        "tape_voice_raw"
-    )
-    # Generate BG
-    bg_path = gen_tango("space station background humming, distant heavy explosions, metallic crashing, eerie silence", "tape_bg_raw", duration=20.0)
-    
     final_wav = os.path.join(HQ_DIR, "tape_log.wav")
+    if os.path.exists(final_wav):
+        print("Skipping Tape Log mixing (already exists)")
+        convert_to_ogg(final_wav, "tape_log")
+        return
+
+    print("Mixing Tape Log...")
     # Mix with filters
     filter_complex = "[0:a]highpass=f=300,lowpass=f=3000,vibrato=f=6:d=0.1,volume=2.5[v];[1:a]volume=0.6[bg];[v][bg]amix=inputs=2:duration=first[out]"
     
