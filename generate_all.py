@@ -23,6 +23,9 @@ except ImportError as e:
 # Constants
 HQ_DIR = "moon_base_assets_hq"
 GAME_DIR = "moon_base_assets"
+NUMBERS_HQ = os.path.join(HQ_DIR, "numbers")
+NUMBERS_GAME = os.path.join(GAME_DIR, "numbers")
+
 # Mac M1/M2/M3 usually prefers "mps", but TangoFlux might require CUDA or CPU for now
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 # TangoFlux prefers bfloat16 on CUDA, float32 on MPS/CPU
@@ -32,6 +35,10 @@ if not os.path.exists(HQ_DIR):
     os.makedirs(HQ_DIR)
 if not os.path.exists(GAME_DIR):
     os.makedirs(GAME_DIR)
+if not os.path.exists(NUMBERS_HQ):
+    os.makedirs(NUMBERS_HQ)
+if not os.path.exists(NUMBERS_GAME):
+    os.makedirs(NUMBERS_GAME)
 
 # Models
 bark_processor = None
@@ -55,6 +62,18 @@ def get_tango():
         else:
             tango_model = TangoFluxInference(name="declare-lab/TangoFlux", device=DEVICE)
     return tango_model
+
+def gen_bark(text, filename, preset="v2/en_speaker_6", target_dir=HQ_DIR):
+    print(f"Generating Bark (Voice): {filename} in {target_dir}...")
+    processor, model = get_bark()
+    inputs = processor(text, voice_preset=preset)
+    with torch.no_grad():
+        audio_array = model.generate(**inputs.to(DEVICE))
+        audio_array = audio_array.cpu().numpy().squeeze()
+    
+    wav_path = os.path.join(target_dir, filename + ".wav")
+    scipy.io.wavfile.write(wav_path, rate=model.generation_config.sample_rate, data=audio_array)
+    return wav_path
 
 def gen_tango(prompt, filename, duration=10.0, steps=25):
     print(f"Generating TangoFlux (SFX): {filename}...")
@@ -108,9 +127,10 @@ def gen_tango(prompt, filename, duration=10.0, steps=25):
     # TangoFlux output is 44100Hz
     scipy.io.wavfile.write(wav_path, rate=44100, data=(audio * 32767).astype(np.int16))
     return wav_path
-def convert_to_ogg(wav_path, ogg_name, quality=6):
-    print(f"Converting to {ogg_name}.ogg...")
-    ogg_path = os.path.join(GAME_DIR, ogg_name + ".ogg")
+
+def convert_to_ogg(wav_path, ogg_name, quality=6, target_dir=GAME_DIR):
+    print(f"Converting to {ogg_name}.ogg in {target_dir}...")
+    ogg_path = os.path.join(target_dir, ogg_name + ".ogg")
     subprocess.run(['ffmpeg', '-y', '-i', wav_path, '-c:a', 'libvorbis', '-q:a', str(quality), ogg_path], 
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -267,6 +287,49 @@ def main():
 
     # Mixed Tape Log
     mix_tape_log()
+
+    # 6. Numbers, Percentages and Units (Robotic Voice)
+    print("Generating Numeric and Unit Library...")
+    
+    # Numbers 1..200
+    for i in range(1, 201):
+        name = f"number_{i}"
+        wav = gen_bark(str(i), name, preset="v2/en_speaker_9", target_dir=NUMBERS_HQ)
+        convert_to_ogg(wav, name, target_dir=NUMBERS_GAME)
+    
+    # "point"
+    wav = gen_bark("point", "point", preset="v2/en_speaker_9", target_dir=NUMBERS_HQ)
+    convert_to_ogg(wav, "point", target_dir=NUMBERS_GAME)
+    
+    # Percentages 0%, 5% .. 100%
+    for i in range(0, 101, 5):
+        name = f"percent_{i}"
+        text = f"{i} percent"
+        wav = gen_bark(text, name, preset="v2/en_speaker_9", target_dir=NUMBERS_HQ)
+        convert_to_ogg(wav, name, target_dir=NUMBERS_GAME)
+        
+    # Units
+    units = {
+        "kg": "kilograms",
+        "kilogram": "kilogram",
+        "kilograms": "kilograms",
+        "ton": "ton",
+        "tons": "tons",
+        "celsius": "degrees celsius",
+        "degree": "degree",
+        "degrees": "degrees",
+        "ppm": "parts per million",
+        "ppm_short": "P P M",
+        "bar": "bar",
+        "bars": "bars",
+        "pascal": "pascal",
+        "pascals": "pascals",
+        "psi": "P S I",
+        "percent": "percent"
+    }
+    for filename, text in units.items():
+        wav = gen_bark(text, filename, preset="v2/en_speaker_9", target_dir=NUMBERS_HQ)
+        convert_to_ogg(wav, filename, target_dir=NUMBERS_GAME)
 
     print("\nAll assets generated successfully!")
 
