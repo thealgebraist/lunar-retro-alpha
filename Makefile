@@ -11,17 +11,44 @@ FFMPEG_DIR := ffmpeg-static
 ZIG := $(shell which zig 2>/dev/null || echo ./$(ZIG_DIR)/zig)
 FFMPEG := $(shell which ffmpeg 2>/dev/null || echo ./$(FFMPEG_DIR)/ffmpeg)
 PYTHON := python3
+VENV_DIR := .venv
+VENV_PYTHON := $(VENV_DIR)/bin/python3
 
 ASSET_DIR := moon_base_assets
 WASM_TARGET := game.wasm
 WASM_B64 := game.wasm.base64
 
-.PHONY: all build clean gensamples setup_tools setup_zig setup_ffmpeg
+.PHONY: all build clean gensamples genimages genvideo setup_tools setup_zig setup_ffmpeg setup_python
 
 all: build
 
-setup_tools: setup_zig setup_ffmpeg
+setup_tools: setup_zig setup_ffmpeg setup_python
 	@if ! which $(PYTHON) >/dev/null 2>&1; then echo "Error: python3 not found."; exit 1; fi
+
+setup_python:
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "Creating virtual environment..."; \
+		$(PYTHON) -m venv $(VENV_DIR); \
+	fi
+	@echo "Installing/Checking Python dependencies in $(VENV_DIR)..."
+	@$(VENV_PYTHON) -m pip install --upgrade pip
+	@$(VENV_PYTHON) -m pip install \
+		"torch>=2.4.0" \
+		"torchvision" \
+		"torchaudio" \
+		"diffusers>=0.31.0" \
+		"transformers>=4.44.0" \
+		"accelerate>=0.34.2" \
+		"huggingface-hub<1.0" \
+		"tokenizers>=0.22.0,<=0.23.0" \
+		"scipy>=1.16.0" \
+		"numpy<2.3.0" \
+		"pydub" \
+		"soundfile" \
+		"opencv-python" \
+		"moviepy" \
+		"tangoflux" \
+		"datasets"
 
 setup_zig:
 	@if [ ! -x "$(ZIG)" ]; then \
@@ -37,7 +64,7 @@ setup_ffmpeg:
 	fi
 
 build: setup_tools $(WASM_TARGET) $(WASM_B64) backstory_frames.json
-	$(PYTHON) embed_wasm.py
+	$(VENV_PYTHON) embed_wasm.py
 
 $(WASM_TARGET): game.zig
 	$(ZIG) build-exe game.zig -target wasm32-freestanding -rdynamic -O ReleaseSmall --name game -fno-entry
@@ -46,21 +73,19 @@ $(WASM_B64): $(WASM_TARGET)
 	base64 < $(WASM_TARGET) > $(WASM_B64)
 
 backstory_frames.json: gen_frames.py
-	$(PYTHON) gen_frames.py > backstory_frames.json
+	$(VENV_PYTHON) gen_frames.py > backstory_frames.json
 
 gensamples: setup_tools
-	$(PYTHON) generate_moon_base_sounds.py
-	$(PYTHON) generate_intro_synth.py
-	$(PYTHON) generate_backstory_audio.py
-	$(PYTHON) generate_ending_synth.py
-	$(PYTHON) generate_escape_pod_large.py
-	$(PYTHON) generate_more_triggers.py
-	$(PYTHON) generate_stable_audio.py
-	$(PYTHON) normalize_samples.py
-	$(PYTHON) convert_to_ogg.py
+	$(VENV_PYTHON) generate_all.py
+
+genimages: setup_tools
+	$(VENV_PYTHON) generate_images.py
+
+genvideo: setup_tools
+	$(VENV_PYTHON) genvideo.py
 
 clean:
 	rm -f $(WASM_TARGET) $(WASM_B64) game.wasm.o backstory_frames.json
-	rm -rf $(ZIG_DIR) $(FFMPEG_DIR)
+	rm -rf $(ZIG_DIR) $(FFMPEG_DIR) $(VENV_DIR)
 	find $(ASSET_DIR) -name "*.wav" -delete
 	find $(ASSET_DIR) -name "*.ogg" -delete
