@@ -2,7 +2,7 @@ import os
 
 # 1. Get the latest base64 data
 with open('game.wasm.base64', 'r') as f:
-    b64_data = f.read().strip()
+    b64_data = "".join(f.read().split())
 
 # 2. Get the animation frames
 with open('backstory_frames.json', 'r') as f:
@@ -16,6 +16,9 @@ with open('alien_frames.json', 'r') as f:
 
 with open('disintegration_frames.json', 'r') as f:
     disintegration_data = f.read().strip()
+
+with open('item_anims.json', 'r') as f:
+    item_anims_data = f.read().strip()
 
 # 3. Read the template
 with open('index.template.html', 'r') as f:
@@ -60,10 +63,20 @@ dis_end_idx = content.find(dis_end, dis_start + len(dis_marker))
 if dis_start != -1:
     content = content[:dis_start + len(dis_marker)] + disintegration_data + content[dis_end_idx:]
 
-# 9. Write to index.html and template
+# 9. Replace Item Animation Data
+item_marker = 'const ITEM_ANIMATION_DATA = '
+item_end = ';'
+item_start = content.find(item_marker)
+item_end_idx = content.find(item_end, item_start + len(item_marker))
+if item_start != -1:
+    content = content[:item_start + len(item_marker)] + item_anims_data + content[item_end_idx:]
+
+# 10. Write to index.html and template
 with open('index.html', 'w') as f:
     f.write(content)
 with open('index.template.html', 'w') as f:
     f.write(content)
+with open('Lunar Retro-Alpha.html', 'w') as f:
+    f.write(content)
 
-print(f"Successfully embedded WASM and Animation into index.html")
+print(f"Successfully embedded WASM and Animation into index.html and Lunar Retro-Alpha.html")

@@ -142,6 +142,13 @@ const Item = enum {
             .battery => "High-Capacity Battery",
         };
     }
+
+    fn description(self: Item) []const u8 {
+        return switch (self) {
+            .control_board => "A dense circuit board covered in glowing vacuum tubes and complex wiring. It seems to be the brains of the launch system.",
+            .battery => "A heavy, lead-lined cylinder pulsing with a faint blue light. The label reads: LUNAR-CORE TYPE 4.",
+        };
+    }
 };
 
 const Location = struct {
@@ -957,11 +964,43 @@ export fn onCommand(len: usize) void {
             playSound(assets.airlock_death.ptr, assets.airlock_death.len, false);
             triggerSpecialSequence(3);
         } else jsPrint("There is no airlock here.\n");
+    } else if (std.mem.eql(u8, cmd, "look") and arg != null) {
+        if (std.mem.indexOf(u8, arg.?, "board") != null) {
+            const has_it = state.hasItem(.control_board);
+            const is_here = (state.items_at_loc[@intFromEnum(state.current_loc)] == .control_board);
+            if (has_it or is_here) {
+                triggerSpecialSequence(10);
+            } else jsPrint("You don't see any board here.\n");
+        } else if (std.mem.indexOf(u8, arg.?, "battery") != null) {
+            const has_it = state.hasItem(.battery);
+            const is_here = (state.items_at_loc[@intFromEnum(state.current_loc)] == .battery);
+            if (has_it or is_here) {
+                triggerSpecialSequence(11);
+            } else jsPrint("You don't see any battery here.\n");
+        } else {
+            jsPrint("Look at what?\n");
+        }
     } else if (std.mem.eql(u8, cmd, "look") or std.mem.eql(u8, cmd, "l")) {
         changeLocation(state.current_loc);
+    } else if ((std.mem.eql(u8, cmd, "examine") or std.mem.eql(u8, cmd, "x")) and arg != null) {
+        if (std.mem.indexOf(u8, arg.?, "board") != null) {
+            const has_it = state.hasItem(.control_board);
+            const is_here = (state.items_at_loc[@intFromEnum(state.current_loc)] == .control_board);
+            if (has_it or is_here) {
+                jsPrint(Item.description(.control_board)); jsPrint("\n");
+            } else jsPrint("You don't see any board here.\n");
+        } else if (std.mem.indexOf(u8, arg.?, "battery") != null) {
+            const has_it = state.hasItem(.battery);
+            const is_here = (state.items_at_loc[@intFromEnum(state.current_loc)] == .battery);
+            if (has_it or is_here) {
+                jsPrint(Item.description(.battery)); jsPrint("\n");
+            } else jsPrint("You don't see any battery here.\n");
+        } else {
+            jsPrint("Examine what?\n");
+        }
     } else if (std.mem.eql(u8, cmd, "examine") or std.mem.eql(u8, cmd, "x")) {
         const item = if (@intFromEnum(state.current_loc) < 17) state.items_at_loc[@intFromEnum(state.current_loc)] else null;
-        if (item) |_| { jsPrint(getLoc(state.current_loc).item_description); jsPrint("\n"); }
+        if (item) |i| { jsPrint(i.description()); jsPrint("\n"); }
         else jsPrint("There's nothing here to examine closely.\n");
     } else if (std.mem.eql(u8, cmd, "go") or std.mem.eql(u8, cmd, "n") or std.mem.eql(u8, cmd, "s") or std.mem.eql(u8, cmd, "e") or std.mem.eql(u8, cmd, "w") or std.mem.eql(u8, cmd, "u") or std.mem.eql(u8, cmd, "d") or std.mem.eql(u8, cmd, "north") or std.mem.eql(u8, cmd, "south") or std.mem.eql(u8, cmd, "east") or std.mem.eql(u8, cmd, "west") or std.mem.eql(u8, cmd, "up") or std.mem.eql(u8, cmd, "down")) {
         if (state.lever_pulled and @intFromEnum(state.current_loc) >= 17) {
