@@ -11,6 +11,9 @@ with open('backstory_frames.json', 'r') as f:
 with open('airlock_frames.json', 'r') as f:
     airlock_data = f.read().strip()
 
+with open('alien_frames.json', 'r') as f:
+    alien_data = f.read().strip()
+
 # 3. Read the template
 with open('index.template.html', 'r') as f:
     content = f.read()
@@ -38,7 +41,15 @@ air_end_idx = content.find(air_end, air_start + len(air_marker))
 if air_start != -1:
     content = content[:air_start + len(air_marker)] + airlock_data + content[air_end_idx:]
 
-# 7. Write to index.html and template
+# 7. Replace Alien Animation Data
+alien_marker = 'const ALIEN_ANIMATION_DATA = '
+alien_end = ';'
+alien_start = content.find(alien_marker)
+alien_end_idx = content.find(alien_end, alien_start + len(alien_marker))
+if alien_start != -1:
+    content = content[:alien_start + len(alien_marker)] + alien_data + content[alien_end_idx:]
+
+# 8. Write to index.html and template
 with open('index.html', 'w') as f:
     f.write(content)
 with open('index.template.html', 'w') as f:

@@ -71,6 +71,7 @@ const assets = struct {
     const reaction_4 = @embedFile("moon_base_assets/reaction_4.ogg");
     const reaction_5 = @embedFile("moon_base_assets/reaction_5.ogg");
     const reaction_6 = @embedFile("moon_base_assets/reaction_6.ogg");
+    const evacuate_announcement = @embedFile("moon_base_assets/evacuate_announcement.ogg");
 
     const lever_clonk = @embedFile("moon_base_assets/lever_clonk.ogg");
     const lever_bad_0 = @embedFile("moon_base_assets/lever_bad_0.ogg");
@@ -113,25 +114,13 @@ const LocationId = enum {
 };
 
 const Item = enum {
-    logic_board_a,
-    control_board_b,
-    power_board_c,
-    interface_board_d,
-    battery_1,
-    battery_2,
-    battery_3,
-    battery_4,
+    control_board,
+    battery,
 
     fn name(self: Item) []const u8 {
         return switch (self) {
-            .logic_board_a => "Logic Board A",
-            .control_board_b => "Control Board B (Launch Controller)",
-            .power_board_c => "Power Board C (Generator Module)",
-            .interface_board_d => "Interface Board D (Pod Link)",
-            .battery_1 => "High-Capacity Battery 1",
-            .battery_2 => "High-Capacity Battery 2",
-            .battery_3 => "High-Capacity Battery 3",
-            .battery_4 => "High-Capacity Battery 4",
+            .control_board => "Control Board (Launch System)",
+            .battery => "High-Capacity Battery",
         };
     }
 };
@@ -152,7 +141,7 @@ const Location = struct {
 
 const GameState = struct {
     current_loc: LocationId = .observation_dome,
-    inventory: [8]bool = [_]bool{false} ** 8,
+    inventory: [2]bool = [_]bool{false} ** 2,
     items_at_loc: [17]?Item = [_]?Item{null} ** 17,
     visited: [17]bool = [_]bool{false} ** 17,
     reactor_powered: bool = false,
@@ -179,6 +168,7 @@ const GameState = struct {
     alien_move_timer: f32 = 0.0,
     alien_moves_made: u8 = 0,
     spawn_timer: f32 = 0.0,
+    announcement_timer: f32 = 0.0,
     rumble_timer: f32 = 0.0,
     rumble_active: bool = false,
     rumble_stage: u8 = 0, // 0: inactive, 1: playing rumble, 2: playing reaction
@@ -225,6 +215,8 @@ export fn getTapeClickPtr() [*]const u8 { return assets.tape_click.ptr; }
 export fn getTapeClickLen() usize { return assets.tape_click.len; }
 export fn getTapeLogPtr() [*]const u8 { return assets.tape_log.ptr; }
 export fn getTapeLogLen() usize { return assets.tape_log.len; }
+export fn getEvacuateAnnouncementPtr() [*]const u8 { return assets.evacuate_announcement.ptr; }
+export fn getEvacuateAnnouncementLen() usize { return assets.evacuate_announcement.len; }
 
 export fn getAlienActive() bool { return state.alien_active; }
 export fn getAlienPos() u8 { return @intFromEnum(state.alien_pos); }
@@ -270,16 +262,29 @@ export fn tickWithSeed(dt: f32, seed: u32) void {
     if (state.game_over) return;
     rng_state = rng_state +% seed; // Mix in entropy from JS
 
-    // Rumble Logic
+    // Announcement Logic
+    state.announcement_timer += dt;
+    if (state.announcement_timer >= 90.0) {
+        state.announcement_timer = 0.0;
+        if (@intFromEnum(state.current_loc) <= 15) {
+            playSound(assets.evacuate_announcement.ptr, assets.evacuate_announcement.len, false);
+            jsPrint("\n[ INTERCOM: \"Evacuate the station. Oxygen level low.\" ]\n");
+        }
+    }
+
+    // Rumble Logic - Only in the mine (id >= 17)
     if (!state.rumble_active) {
         state.rumble_timer += dt;
-        // Trigger roughly every 120 seconds
-        if (state.rumble_timer >= 120.0) {
+        // Trigger roughly every 120 seconds, only if in the mine
+        if (state.rumble_timer >= 120.0 and @intFromEnum(state.current_loc) >= 17) {
              state.rumble_timer = 0.0;
              state.rumble_active = true;
              state.rumble_stage = 1;
              playSound(assets.train_rumble.ptr, assets.train_rumble.len, false);
              jsPrint("\n[ The ground begins to tremble... a deep, growing roar fills the air... ]\n");
+        } else if (state.rumble_timer >= 120.0) {
+             // Reset timer even if not in mine so it doesn't trigger immediately upon entering
+             state.rumble_timer = 0.0;
         }
     } else {
         state.rumble_timer += dt;
@@ -389,7 +394,7 @@ const locations = [_]Location{
         .id = .comms_array,
         .name = "Communications Array",
         .description = "Towering racks of vacuum tubes. The equipment here is mostly passive reception gear.",
-        .item_description = "Logic Board A: Gold contacts still shine.",
+        .item_description = "A complex control board with gold contacts.",
         .bg_sound = assets.comms_array,
         .n = .observation_dome,
         .e = .security_hub,
@@ -398,7 +403,6 @@ const locations = [_]Location{
         .id = .security_hub,
         .name = "Security Hub",
         .description = "Banks of CRT monitors show grainy views of empty corridors. A single central terminal is active here.",
-        .item_description = "Control Board B: Black polymer shell.",
         .bg_sound = assets.security_hub,
         .w = .comms_array,
         .s = .elevator_lobby_alpha,
@@ -415,7 +419,6 @@ const locations = [_]Location{
         .id = .mess_hall,
         .name = "Mess Hall",
         .description = "Teal Formica tables. A ghostly tune drifts from a cracked intercom. A ladder leads up.",
-        .item_description = "Logic Board A: Hidden in the toaster.",
         .bg_sound = assets.mess_hall,
         .u = .elevator_lobby_alpha,
         .s = .sleeping_pods,
@@ -424,7 +427,7 @@ const locations = [_]Location{
         .id = .sleeping_pods,
         .name = "Sleeping Pods",
         .description = "Tiered bunks carved into the rock. Warm air smells of stale laundry.",
-        .item_description = "Battery 1: Lead-acid cell.",
+        .item_description = "A heavy high-capacity battery cell.",
         .bg_sound = assets.sleeping_pods,
         .n = .mess_hall,
         .e = .medical_lab,
@@ -433,7 +436,6 @@ const locations = [_]Location{
         .id = .medical_lab,
         .name = "Medical Lab",
         .description = "Surgical lamps and rows of glass vials. A ladder leads down.",
-        .item_description = "Battery 2: Radiation-shielded.",
         .bg_sound = assets.medical_lab,
         .w = .sleeping_pods,
         .s = .elevator_lobby_beta,
@@ -450,7 +452,6 @@ const locations = [_]Location{
         .id = .main_reactor,
         .name = "Main Reactor",
         .description = "A massive sphere pulses with cerenkov-blue light. A ladder leads up.",
-        .item_description = "Power Board C: Handles high-voltage.",
         .bg_sound = assets.main_reactor,
         .u = .elevator_lobby_beta,
         .e = .fuel_storage,
@@ -459,7 +460,6 @@ const locations = [_]Location{
         .id = .fuel_storage,
         .name = "Fuel Storage",
         .description = "Cold storage for lead-lined canisters. Silence broken by groaning pipes.",
-        .item_description = "Control Board B: Oversized capacitors.",
         .bg_sound = assets.fuel_storage,
         .w = .main_reactor,
         .s = .battery_bank,
@@ -468,7 +468,6 @@ const locations = [_]Location{
         .id = .battery_bank,
         .name = "Battery Bank",
         .description = "Floor-to-ceiling racks of glass batteries. Smell of electrolytes.",
-        .item_description = "Battery 3: Lithium-moon-dust hybrid.",
         .bg_sound = assets.battery_bank,
         .n = .fuel_storage,
         .w = .maintenance_tunnels,
@@ -477,7 +476,6 @@ const locations = [_]Location{
         .id = .maintenance_tunnels,
         .name = "Maintenance Tunnels",
         .description = "Maze of hissing steam pipes. Metal grating floor.",
-        .item_description = "Power Board C: Warm to the touch.",
         .bg_sound = assets.maintenance_tunnels,
         .e = .battery_bank,
         .u = .cargo_loading,
@@ -486,7 +484,6 @@ const locations = [_]Location{
         .id = .cargo_loading,
         .name = "Cargo Loading",
         .description = "Massive hangar. Yellow forklift near urgency crates. A ladder leads down.",
-        .item_description = "Battery 4: Marked MAX LOAD.",
         .bg_sound = assets.cargo_loading,
         .d = .maintenance_tunnels,
         .w = .oxygen_scrubbers,
@@ -495,7 +492,6 @@ const locations = [_]Location{
         .id = .oxygen_scrubbers,
         .name = "Oxygen Scrubbers",
         .description = "Giant glass cylinders filled with bubbling green algae. The air is fresh but the monitoring station is dark.",
-        .item_description = "Interface Board D: Complex 1955-era multi-pin.",
         .bg_sound = assets.oxygen_scrubbers,
         .e = .cargo_loading,
         .n = .launch_control,
@@ -638,23 +634,17 @@ fn changeLocation(id: LocationId) void {
     if (id == .bunk_room) jsPrint("[ HINT: You can 'sleep' or 'read'. ]\n");
 
     // Missing part hints
-    if (id == .main_reactor and !state.reactor_powered) jsPrint("The reactor control panel has an empty slot labeled 'POWER BOARD C'.\n");
-    if (id == .launch_control and !state.launch_computer_active) jsPrint("The launch computer is lifeless. A slot marked 'CONTROL BOARD B' is empty.\n");
-    if (id == .escape_pod and !state.pod_interface_ready) jsPrint("The pod's nav system is offline. It looks like it's missing 'INTERFACE BOARD D'.\n");
+    if (id == .main_reactor and !state.reactor_powered) jsPrint("The reactor control panel has an empty slot labeled 'CONTROL BOARD'.\n");
+    if (id == .launch_control and !state.launch_computer_active) jsPrint("The launch computer is lifeless. A slot marked 'CONTROL BOARD' is empty.\n");
+    if (id == .escape_pod and !state.pod_interface_ready) jsPrint("The pod's nav system is offline. It looks like it's missing the 'CONTROL BOARD'.\n");
     if (id == .escape_pod and state.pod_interface_ready and state.batteries_inserted < 1) {
         jsPrint("The battery bank is empty. It requires 1 High-Capacity Battery.\n");
     }
 }
 
 export fn init() void {
-    state.items_at_loc[@intFromEnum(LocationId.mess_hall)] = .logic_board_a;
-    state.items_at_loc[@intFromEnum(LocationId.fuel_storage)] = .control_board_b;
-    state.items_at_loc[@intFromEnum(LocationId.maintenance_tunnels)] = .power_board_c;
-    state.items_at_loc[@intFromEnum(LocationId.oxygen_scrubbers)] = .interface_board_d;
-    state.items_at_loc[@intFromEnum(LocationId.sleeping_pods)] = .battery_1;
-    state.items_at_loc[@intFromEnum(LocationId.medical_lab)] = .battery_2;
-    state.items_at_loc[@intFromEnum(LocationId.battery_bank)] = .battery_3;
-    state.items_at_loc[@intFromEnum(LocationId.cargo_loading)] = .battery_4;
+    state.items_at_loc[@intFromEnum(LocationId.comms_array)] = .control_board;
+    state.items_at_loc[@intFromEnum(LocationId.sleeping_pods)] = .battery;
     
     // Generate shuttle code
     state.shuttle_code[0] = @as(u8, @intFromFloat(randomFloat() * 26.0)) + 'A';
@@ -897,37 +887,35 @@ export fn onCommand(len: usize) void {
         const target = arg orelse "";
         var handled = false;
         if (std.mem.eql(u8, target, "board") or std.mem.eql(u8, target, "") or std.mem.eql(u8, target, "item")) {
-            if (loc == .main_reactor and state.hasItem(.power_board_c)) {
-                state.setItem(.power_board_c, false); state.reactor_powered = true;
-                playSound(assets.reactor_ignition_roar.ptr, assets.reactor_ignition_roar.len, false);
-                jsPrint("The reactor roars with power! Main Generator is now ONLINE.\n"); handled = true;
-            } else if (loc == .launch_control and state.hasItem(.control_board_b)) {
-                if (!state.reactor_powered) jsPrint("The computer remains dark. It needs power from the Main Reactor.\n")
-                else { state.setItem(.control_board_b, false); state.launch_computer_active = true;
-                    playSound(assets.comms_uplink_chirp.ptr, assets.comms_uplink_chirp.len, false);
-                    jsPrint("The launch computer flickers to life! Systems are now READY.\n"); }
-                handled = true;
-            } else if (loc == .escape_pod and state.hasItem(.interface_board_d)) {
-                if (!state.launch_computer_active) jsPrint("The pod interface won't accept the board. The Launch Computer must be online.\n")
-                else { state.setItem(.interface_board_d, false); state.pod_interface_ready = true;
-                    playSound(assets.pod_systems_active.ptr, assets.pod_systems_active.len, false);
-                    jsPrint("Pod systems synced with Launch Control. Interface Board D installed.\n"); }
-                handled = true;
+            if (state.hasItem(.control_board)) {
+                if (loc == .main_reactor) {
+                    state.reactor_powered = true;
+                    playSound(assets.reactor_ignition_roar.ptr, assets.reactor_ignition_roar.len, false);
+                    jsPrint("The reactor roars with power! Main Generator is now ONLINE.\n"); handled = true;
+                } else if (loc == .launch_control) {
+                    if (!state.reactor_powered) jsPrint("The computer remains dark. It needs power from the Main Reactor.\n")
+                    else { state.launch_computer_active = true;
+                        playSound(assets.comms_uplink_chirp.ptr, assets.comms_uplink_chirp.len, false);
+                        jsPrint("The launch computer flickers to life! Systems are now READY.\n"); 
+                    }
+                    handled = true;
+                } else if (loc == .escape_pod) {
+                    if (!state.launch_computer_active) jsPrint("The pod interface won't accept the board. The Launch Computer must be online.\n")
+                    else { state.pod_interface_ready = true;
+                        playSound(assets.pod_systems_active.ptr, assets.pod_systems_active.len, false);
+                        jsPrint("Pod systems synced with Launch Control. Control Board installed.\n"); }
+                    handled = true;
+                }
             }
         }
         if (!handled and (std.mem.eql(u8, target, "battery") or std.mem.eql(u8, target, ""))) {
             if (loc == .escape_pod) {
                 if (!state.launch_computer_active) jsPrint("The battery slot is locked until the Launch Computer is powered.\n")
-                else {
-                    const batteries = [_]Item{ .battery_1, .battery_2, .battery_3, .battery_4 };
-                    for (batteries) |b| {
-                        if (state.hasItem(b)) {
-                            state.setItem(b, false); state.batteries_inserted += 1;
-                            playSound(assets.battery_insert.ptr, assets.battery_insert.len, false);
-                            jsPrint("Battery installed. Systems charging...\n");
-                            handled = true; break;
-                        }
-                    }
+                else if (state.hasItem(.battery)) {
+                    state.setItem(.battery, false); state.batteries_inserted = 1;
+                    playSound(assets.battery_insert.ptr, assets.battery_insert.len, false);
+                    jsPrint("Battery installed. Systems charging...\n");
+                    handled = true;
                 }
             }
         }
