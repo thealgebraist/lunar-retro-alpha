@@ -144,8 +144,8 @@ const GameState = struct {
     inventory: [2]bool = [_]bool{false} ** 2,
     items_at_loc: [17]?Item = [_]?Item{null} ** 17,
     visited: [17]bool = [_]bool{false} ** 17,
-    reactor_powered: bool = false,
-    launch_computer_active: bool = false,
+    reactor_powered: bool = true,
+    launch_computer_active: bool = true,
     pod_interface_ready: bool = false,
     batteries_inserted: u4 = 0,
     elevator_arrived: bool = false,
@@ -634,8 +634,6 @@ fn changeLocation(id: LocationId) void {
     if (id == .bunk_room) jsPrint("[ HINT: You can 'sleep' or 'read'. ]\n");
 
     // Missing part hints
-    if (id == .main_reactor and !state.reactor_powered) jsPrint("The reactor control panel has an empty slot labeled 'CONTROL BOARD'.\n");
-    if (id == .launch_control and !state.launch_computer_active) jsPrint("The launch computer is lifeless. A slot marked 'CONTROL BOARD' is empty.\n");
     if (id == .escape_pod and !state.pod_interface_ready) jsPrint("The pod's nav system is offline. It looks like it's missing the 'CONTROL BOARD'.\n");
     if (id == .escape_pod and state.pod_interface_ready and state.batteries_inserted < 1) {
         jsPrint("The battery bank is empty. It requires 1 High-Capacity Battery.\n");
@@ -888,31 +886,20 @@ export fn onCommand(len: usize) void {
         var handled = false;
         if (std.mem.eql(u8, target, "board") or std.mem.eql(u8, target, "") or std.mem.eql(u8, target, "item")) {
             if (state.hasItem(.control_board)) {
-                if (loc == .main_reactor) {
-                    state.reactor_powered = true;
-                    playSound(assets.reactor_ignition_roar.ptr, assets.reactor_ignition_roar.len, false);
-                    jsPrint("The reactor roars with power! Main Generator is now ONLINE.\n"); handled = true;
-                } else if (loc == .launch_control) {
-                    if (!state.reactor_powered) jsPrint("The computer remains dark. It needs power from the Main Reactor.\n")
-                    else { state.launch_computer_active = true;
-                        playSound(assets.comms_uplink_chirp.ptr, assets.comms_uplink_chirp.len, false);
-                        jsPrint("The launch computer flickers to life! Systems are now READY.\n"); 
-                    }
-                    handled = true;
-                } else if (loc == .escape_pod) {
-                    if (!state.launch_computer_active) jsPrint("The pod interface won't accept the board. The Launch Computer must be online.\n")
-                    else { state.pod_interface_ready = true;
-                        playSound(assets.pod_systems_active.ptr, assets.pod_systems_active.len, false);
-                        jsPrint("Pod systems synced with Launch Control. Control Board installed.\n"); }
+                if (loc == .escape_pod) {
+                    state.setItem(.control_board, false);
+                    state.pod_interface_ready = true;
+                    playSound(assets.pod_systems_active.ptr, assets.pod_systems_active.len, false);
+                    jsPrint("Pod systems synced. Control Board installed.\n");
                     handled = true;
                 }
             }
         }
         if (!handled and (std.mem.eql(u8, target, "battery") or std.mem.eql(u8, target, ""))) {
             if (loc == .escape_pod) {
-                if (!state.launch_computer_active) jsPrint("The battery slot is locked until the Launch Computer is powered.\n")
-                else if (state.hasItem(.battery)) {
-                    state.setItem(.battery, false); state.batteries_inserted = 1;
+                if (state.hasItem(.battery)) {
+                    state.setItem(.battery, false);
+                    state.batteries_inserted = 1;
                     playSound(assets.battery_insert.ptr, assets.battery_insert.len, false);
                     jsPrint("Battery installed. Systems charging...\n");
                     handled = true;
