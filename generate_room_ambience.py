@@ -44,7 +44,8 @@ def gen_ambience(prompt, filename):
     inputs = proc(text=[prompt], return_tensors="pt").to(DEVICE)
     
     with torch.no_grad():
-        audio_values = net.generate(**inputs, max_new_tokens=1500)
+        # AudioGen for 30s: 1500 tokens is roughly 30s at 50 tokens/s
+        audio_values = net.generate(**inputs, max_length=1500)
         audio_array = audio_values[0, 0].cpu().numpy()
     
     # Normalize
