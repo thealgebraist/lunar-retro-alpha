@@ -37,7 +37,7 @@ setup_python:
 		"diffusers>=0.32.0" \
 		"transformers>=4.44.0" \
 		"accelerate>=0.34.2" \
-		"huggingface-hub<1.0" \
+		"huggingface-hub" \
 		"tokenizers>=0.22.0,<=0.23.0" \
 		"scipy>=1.16.0" \
 		"numpy<2.3.0" \
