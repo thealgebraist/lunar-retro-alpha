@@ -26,8 +26,8 @@ def get_flux():
     return pipe
 
 def main():
-    # Base prompt for the book consistency
-    base_prompt = "A high-quality close-up photograph of an old open hardcover book resting on a dark wooden table in a dimly lit library. The paper is aged and yellowed. On the open pages, there is a large, detailed black-and-white 1950s style photograph showing: "
+    # Condensed base prompt to save tokens for the scene description
+    base_prompt = "Old open hardcover book on a dark wooden table. Aged yellowed paper. On the pages, a detailed 1950s B&W photo showing: "
     
     scenes = [
         "the very first foundations of the lunar observation dome being laid on the moon's cratered surface, construction cranes, astronaut workers, 1950s retro-futurism",
