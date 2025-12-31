@@ -5,26 +5,24 @@ import torch
 # Add local libs
 sys.path.insert(0, os.path.abspath("local_libs"))
 
-from diffusers import SanaPipeline
+from diffusers import FluxPipeline
 
 # Constants
 BOOK_DIR = "book"
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-# SANA works well with bfloat16 or float16
-TORCH_DTYPE = torch.bfloat16 if DEVICE == "cuda" else torch.float32
-MODEL_ID = "Efficient-Large-Model/Sana_1600M_1024px_diffusers"
+TORCH_DTYPE = torch.bfloat16
+MODEL_ID = "black-forest-labs/FLUX.1-schnell"
 
 if not os.path.exists(BOOK_DIR):
     os.makedirs(BOOK_DIR)
 
-def get_sana():
-    print(f"Loading NVIDIA SANA on {DEVICE}...")
-    pipe = SanaPipeline.from_pretrained(
+def get_flux():
+    print(f"Loading FLUX.1 [schnell] on {DEVICE}...")
+    pipe = FluxPipeline.from_pretrained(
         MODEL_ID, 
-        torch_dtype=TORCH_DTYPE,
-        use_safetensors=True
+        torch_dtype=TORCH_DTYPE
     )
-    pipe.to(DEVICE)
+    pipe.enable_model_cpu_offload()
     return pipe
 
 def main():
@@ -66,7 +64,7 @@ def main():
         "a final triumphant shot of the base with the American flag planted firmly in the foreground, 1950s space race"
     ]
 
-    pipe = get_sana()
+    pipe = get_flux()
 
     for i, scene_prompt in enumerate(scenes):
         name = f"book_page_{i:02d}"
@@ -80,13 +78,13 @@ def main():
         full_prompt = base_prompt + scene_prompt
         print(f"Generating Book Image {i+1}/32: {scene_prompt[:50]}...")
         
-        # SANA typically uses 20 steps and guidance_scale around 5.0
         image = pipe(
-            prompt=full_prompt,
-            num_inference_steps=20,
-            guidance_scale=5.0,
+            full_prompt,
+            num_inference_steps=4,
+            guidance_scale=0.0,
             width=1024,
             height=768,
+            max_sequence_length=256
         ).images[0]
 
         image.save(output_path)
@@ -94,7 +92,7 @@ def main():
             f.write(f"Model: {MODEL_ID}\nPrompt: {full_prompt}\n")
         print(f"Saved to {output_path}")
 
-    print("\nAll book images generated successfully using SANA!")
+    print("\nAll book images generated successfully using FLUX!")
 
 if __name__ == "__main__":
     main()
