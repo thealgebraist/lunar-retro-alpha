@@ -66,7 +66,6 @@ def generate_ltx_video(
         height=512,
         num_inference_steps=50,
         guidance_scale=3.0,
-        mu=7.5, # Required when use_dynamic_shifting is True (default for LTX-Video)
         generator=generator,
     ).frames[0]
 
