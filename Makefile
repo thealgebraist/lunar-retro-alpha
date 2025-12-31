@@ -43,6 +43,7 @@ setup_python:
 		"numpy<2.3.0" \
 		"pydub" \
 		"soundfile" \
+		"librosa" \
 		"opencv-python" \
 		"moviepy" \
 		"datasets" \

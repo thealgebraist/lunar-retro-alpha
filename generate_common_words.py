@@ -5,6 +5,7 @@ import scipy.io.wavfile
 import numpy as np
 import subprocess
 import requests
+import librosa
 
 # Add local libs
 sys.path.insert(0, os.path.abspath("local_libs"))
@@ -22,6 +23,7 @@ WORDS_HQ = os.path.join(HQ_DIR, "words")
 WORDS_GAME = os.path.join(GAME_DIR, "words")
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 VOICE_PRESET = "v2/en_speaker_9" # Robotic androgynous female
+WORDS_PER_BATCH = 64
 
 if not os.path.exists(WORDS_HQ):
     os.makedirs(WORDS_HQ)
@@ -41,7 +43,6 @@ def get_bark():
     return bark_processor, bark_model
 
 def get_1000_words():
-    # Fetch common words list
     url = "https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english-no-swears.txt"
     try:
         response = requests.get(url)
@@ -49,53 +50,71 @@ def get_1000_words():
         return words
     except Exception as e:
         print(f"Error fetching words: {e}")
-        # Fallback list if offline
         return ["the", "be", "to", "of", "and", "a", "in", "that", "have", "i"]
 
-def gen_word(text, filename):
-    wav_path = os.path.join(WORDS_HQ, filename + ".wav")
-    if os.path.exists(wav_path):
-        return wav_path
-
-    print(f"Generating Word: {text}...")
-    processor, model = get_bark()
+def split_audio_into_words(audio_array, sample_rate, word_list):
+    """
+    Attempts to split a long audio array into individual words based on silence.
+    """
+    # Use librosa to detect non-silent intervals
+    # top_db might need tuning based on Bark's noise floor
+    intervals = librosa.effects.split(audio_array, top_db=30)
     
-    # We wrap the word in a very short pause to help Bark focus on the single word
-    inputs = processor(f"[pause] {text} [pause]", voice_preset=VOICE_PRESET)
+    if len(intervals) != len(word_list):
+        print(f"Warning: Detected {len(intervals)} intervals but expected {len(word_list)} words.")
+        # We will still try to save what we found, but the mapping might be shifted
     
-    with torch.no_grad():
-        audio_array = model.generate(**inputs.to(DEVICE))
-        audio_array = audio_array.cpu().numpy().squeeze()
-    
-    # Trim silence? For now just save
-    scipy.io.wavfile.write(wav_path, rate=model.generation_config.sample_rate, data=audio_array)
-    return wav_path
+    for i, (start, end) in enumerate(intervals):
+        if i >= len(word_list): break
+        
+        word = word_list[i].strip().lower()
+        word_audio = audio_array[start:end]
+        
+        # Save WAV
+        wav_path = os.path.join(WORDS_HQ, f"{word}.wav")
+        scipy.io.wavfile.write(wav_path, rate=sample_rate, data=word_audio)
+        
+        # Convert to OGG
+        convert_to_ogg(wav_path, word)
 
 def convert_to_ogg(wav_path, ogg_name):
     ogg_path = os.path.join(WORDS_GAME, ogg_name + ".ogg")
-    if os.path.exists(ogg_path):
-        return
-    # Robotic PA quality
     filter_cmd = ["-af", "highpass=f=200,lowpass=f=4000,volume=1.5"]
     subprocess.run(['ffmpeg', '-y', '-i', wav_path] + filter_cmd + ['-c:a', 'libvorbis', '-q:a', '4', ogg_path], 
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def main():
     words = get_1000_words()
-    print(f"Generating {len(words)} common words...")
+    print(f"Generating {len(words)} words in batches of {WORDS_PER_BATCH}...")
     
-    for word in words:
-        # Sanitized filename
-        filename = word.strip().lower()
-        if not filename: continue
-        
-        try:
-            wav = gen_word(filename, filename)
-            convert_to_ogg(wav, filename)
-        except Exception as e:
-            print(f"Failed to generate '{filename}': {e}")
+    processor, model = get_bark()
+    sample_rate = model.generation_config.sample_rate
 
-    print("\nCommon words library generated successfully!")
+    for i in range(0, len(words), WORDS_PER_BATCH):
+        batch = words[i:i + WORDS_PER_BATCH]
+        # Check if all words in batch already exist
+        if all(os.path.exists(os.path.join(WORDS_GAME, f"{w.strip().lower()}.ogg")) for w in batch):
+            print(f"Batch starting at {i} already exists. Skipping.")
+            continue
+
+        # Construct batch prompt with commas for pauses
+        # [pause] is a Bark-specific cue
+        batch_text = ", ".join(batch)
+        print(f"Processing Batch {i//WORDS_PER_BATCH + 1}: {batch[0]}...{batch[-1]}")
+        
+        inputs = processor(batch_text, voice_preset=VOICE_PRESET)
+        
+        with torch.no_grad():
+            try:
+                audio_array = model.generate(**inputs.to(DEVICE))
+                audio_array = audio_array.cpu().numpy().squeeze()
+                
+                # Split and save
+                split_audio_into_words(audio_array, sample_rate, batch)
+            except Exception as e:
+                print(f"Error processing batch starting at {i}: {e}")
+
+    print("\nCommon words library generation complete!")
 
 if __name__ == "__main__":
     main()
