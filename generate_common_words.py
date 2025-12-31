@@ -6,15 +6,10 @@ import numpy as np
 import subprocess
 import requests
 import librosa
+from transformers import AutoProcessor, BarkModel
 
 # Add local libs
 sys.path.insert(0, os.path.abspath("local_libs"))
-
-try:
-    from transformers import AutoProcessor, BarkModel
-except ImportError:
-    print("Transformers not found. Please run 'make setup_python' first.")
-    sys.exit(1)
 
 # Constants
 HQ_DIR = "moon_base_assets_hq"
@@ -53,16 +48,10 @@ def get_1000_words():
         return ["the", "be", "to", "of", "and", "a", "in", "that", "have", "i"]
 
 def split_audio_into_words(audio_array, sample_rate, word_list):
-    """
-    Attempts to split a long audio array into individual words based on silence.
-    """
-    # Use librosa to detect non-silent intervals
-    # top_db might need tuning based on Bark's noise floor
     intervals = librosa.effects.split(audio_array, top_db=30)
     
     if len(intervals) != len(word_list):
         print(f"Warning: Detected {len(intervals)} intervals but expected {len(word_list)} words.")
-        # We will still try to save what we found, but the mapping might be shifted
     
     for i, (start, end) in enumerate(intervals):
         if i >= len(word_list): break
@@ -70,11 +59,8 @@ def split_audio_into_words(audio_array, sample_rate, word_list):
         word = word_list[i].strip().lower()
         word_audio = audio_array[start:end]
         
-        # Save WAV
         wav_path = os.path.join(WORDS_HQ, f"{word}.wav")
         scipy.io.wavfile.write(wav_path, rate=sample_rate, data=word_audio)
-        
-        # Convert to OGG
         convert_to_ogg(wav_path, word)
 
 def convert_to_ogg(wav_path, ogg_name):
@@ -92,13 +78,9 @@ def main():
 
     for i in range(0, len(words), WORDS_PER_BATCH):
         batch = words[i:i + WORDS_PER_BATCH]
-        # Check if all words in batch already exist
         if all(os.path.exists(os.path.join(WORDS_GAME, f"{w.strip().lower()}.ogg")) for w in batch):
-            print(f"Batch starting at {i} already exists. Skipping.")
             continue
 
-        # Construct batch prompt with commas for pauses
-        # [pause] is a Bark-specific cue
         batch_text = ", ".join(batch)
         print(f"Processing Batch {i//WORDS_PER_BATCH + 1}: {batch[0]}...{batch[-1]}")
         
@@ -108,8 +90,6 @@ def main():
             try:
                 audio_array = model.generate(**inputs.to(DEVICE))
                 audio_array = audio_array.cpu().numpy().squeeze()
-                
-                # Split and save
                 split_audio_into_words(audio_array, sample_rate, batch)
             except Exception as e:
                 print(f"Error processing batch starting at {i}: {e}")

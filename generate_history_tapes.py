@@ -4,15 +4,10 @@ import torch
 import scipy.io.wavfile
 import numpy as np
 import subprocess
+from transformers import AutoProcessor, BarkModel
 
 # Add local libs
 sys.path.insert(0, os.path.abspath("local_libs"))
-
-try:
-    from transformers import AutoProcessor, BarkModel
-except ImportError:
-    print("Transformers not found. Please run 'make setup_python' first.")
-    sys.exit(1)
 
 # Constants
 HQ_DIR = "moon_base_assets_hq"
@@ -49,8 +44,6 @@ def gen_history_segment(text, filename, preset="v2/en_speaker_6"):
     inputs = processor(text, voice_preset=preset)
     
     with torch.no_grad():
-        # Bark generation for long-ish text
-        # We might need to split if it's too long, but 30s is roughly the limit for Bark in one go
         audio_array = model.generate(**inputs.to(DEVICE))
         audio_array = audio_array.cpu().numpy().squeeze()
     
@@ -60,7 +53,7 @@ def gen_history_segment(text, filename, preset="v2/en_speaker_6"):
 def convert_to_ogg(wav_path, ogg_name):
     print(f"Converting to {ogg_name}.ogg...")
     ogg_path = os.path.join(GAME_DIR, ogg_name + ".ogg")
-    # Tape-like quality: mono, limited bandwidth, slight noise
+    # Tape-like quality
     filter_cmd = ["-af", "highpass=f=200,lowpass=f=3500,volume=1.5"]
     subprocess.run(['ffmpeg', '-y', '-i', wav_path] + filter_cmd + ['-c:a', 'libvorbis', '-q:a', '4', ogg_path], 
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

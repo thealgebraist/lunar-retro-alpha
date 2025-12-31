@@ -4,19 +4,10 @@ import torch
 import scipy.io.wavfile
 import numpy as np
 import subprocess
+from transformers import AutoProcessor, AudioGenForConditionalGeneration
 
 # Add local libs
 sys.path.insert(0, os.path.abspath("local_libs"))
-
-try:
-    from diffusers import AudioLDM2Pipeline # AudioGen is supported via similar pipelines or dedicated
-    # However, audiogen-medium is often used with the 'audiocraft' library or transformers
-    from transformers import AutoProcessor, AudioScriptProcessor, MusicgenForConditionalGeneration
-    # For AudioGen specifically:
-    from transformers import AudioGenForConditionalGeneration
-except ImportError:
-    print("Dependencies not found. Please run 'make setup_python' first.")
-    sys.exit(1)
 
 # Constants
 HQ_DIR = "moon_base_assets_hq/ambience"
@@ -53,12 +44,6 @@ def gen_ambience(prompt, filename):
     inputs = proc(text=[prompt], return_tensors="pt").to(DEVICE)
     
     with torch.no_grad():
-        # AudioGen generates audio based on tokens. 
-        # max_new_tokens controls duration. 
-        # For 30s at 16kHz or 32kHz, we need to calculate tokens.
-        # audiogen-medium typically generates at 16kHz. 
-        # 50 tokens is roughly 1 second? Actually it's more like 250 tokens for 5s.
-        # Let's use 1500 tokens for ~30s (approximate)
         audio_values = net.generate(**inputs, max_new_tokens=1500)
         audio_array = audio_values[0, 0].cpu().numpy()
     
@@ -71,8 +56,8 @@ def gen_ambience(prompt, filename):
     if peak > 0.95:
         audio_array = audio_array * (0.95 / peak)
 
-    # Loopable processing (Crossfade beginning and end)
-    sample_rate = 16000 # AudioGen default
+    # Loopable processing
+    sample_rate = 16000 
     fade_samples = int(4.0 * sample_rate) 
     if len(audio_array) > fade_samples * 2:
         start_fade = audio_array[:fade_samples]
@@ -88,11 +73,10 @@ def gen_ambience(prompt, filename):
 def convert_to_ogg(wav_path, ogg_name):
     print(f"Converting to {ogg_name}.ogg...")
     ogg_path = os.path.join(GAME_DIR, ogg_name + ".ogg")
-    subprocess.run(['ffmpeg', '-y', '-i', wav_path, '-c:a', 'libvorbis', '-q:a', '5', ogg_path], 
+    subprocess.run(['ffmpeg', '-y', '-i', wav_path] + ['-c:a', 'libvorbis', '-q:a', '5', ogg_path], 
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def main():
-    # Rooms from game.zig
     rooms = {
         "observation_dome": "Eerie whistling wind from a micro-leak in a glass dome, faint rhythmic mechanical clock ticking, space station ambiance",
         "comms_array": "Harsh static hiss, electric hum of vacuum tube cabinets, rhythmic clicking of teletype machines",
