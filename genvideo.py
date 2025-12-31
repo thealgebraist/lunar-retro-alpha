@@ -30,7 +30,7 @@ def build_pipeline(model_id: str) -> WanPipeline:
     Initializes the Wan2.1 pipeline.
     """
     print(f"Loading {model_id} onto {DEVICE}...")
-    # Wan2.1 works best with bfloat16
+    # Wan2.1 works best with bfloat16 for the transformer
     dtype = torch.bfloat16 if DEVICE == "cuda" else torch.float32
     
     pipe = WanPipeline.from_pretrained(
@@ -39,6 +39,8 @@ def build_pipeline(model_id: str) -> WanPipeline:
     )
 
     if DEVICE == "cuda":
+        # Force VAE to float32 to prevent green video/artifacts common with Wan/Flux
+        pipe.vae.to(torch.float32)
         pipe.enable_model_cpu_offload()
     else:
         pipe.to(DEVICE)
@@ -54,16 +56,17 @@ def generate_video(
     """
     Generates a high-quality video using Wan2.1 1.3B.
     """
-    generator = torch.Generator(device=DEVICE).manual_seed(seed)
+    generator = torch.Generator(device="cpu").manual_seed(seed) # Use CPU generator for better reproducibility across devices
 
     print(f"Starting generation for prompt: {prompt}")
     
     # Wan2.1 1.3B settings
     # 480P is recommended for this model (832x480)
+    # num_frames MUST be an odd number (8k + 1)
     output = pipe(
         prompt=prompt,
-        negative_prompt="low quality, worst quality, deformed, distorted, grainy, noise, blurry",
-        num_frames=81, # 81 frames for ~5 seconds at 16fps
+        negative_prompt="low quality, worst quality, deformed, distorted, grainy, noise, blurry, green tint, color shift",
+        num_frames=81, 
         width=832,
         height=480,
         num_inference_steps=50,
