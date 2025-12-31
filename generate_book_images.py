@@ -5,28 +5,30 @@ import torch
 # Add local libs
 sys.path.insert(0, os.path.abspath("local_libs"))
 
-from diffusers import FluxPipeline
+from diffusers import SanaPipeline
 
 # Constants
 BOOK_DIR = "book"
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-TORCH_DTYPE = torch.bfloat16
+# SANA works well with bfloat16 or float16
+TORCH_DTYPE = torch.bfloat16 if DEVICE == "cuda" else torch.float32
+MODEL_ID = "Efficient-Large-Model/Sana_1600M_1024px_diffusers"
 
 if not os.path.exists(BOOK_DIR):
     os.makedirs(BOOK_DIR)
 
-def get_flux():
-    print(f"Loading FLUX.1 [schnell] on {DEVICE}...")
-    pipe = FluxPipeline.from_pretrained(
-        "black-forest-labs/FLUX.1-schnell", 
-        torch_dtype=TORCH_DTYPE
+def get_sana():
+    print(f"Loading NVIDIA SANA on {DEVICE}...")
+    pipe = SanaPipeline.from_pretrained(
+        MODEL_ID, 
+        torch_dtype=TORCH_DTYPE,
+        use_safetensors=True
     )
-    pipe.enable_model_cpu_offload()
+    pipe.to(DEVICE)
     return pipe
 
 def main():
     # Base prompt for the book consistency
-    # We describe the open book and the environment first, then the content of the pages
     base_prompt = "A high-quality close-up photograph of an old open hardcover book resting on a dark wooden table in a dimly lit library. The paper is aged and yellowed. On the open pages, there is a large, detailed black-and-white 1950s style photograph showing: "
     
     scenes = [
@@ -64,7 +66,7 @@ def main():
         "a final triumphant shot of the base with the American flag planted firmly in the foreground, 1950s space race"
     ]
 
-    pipe = get_flux()
+    pipe = get_sana()
 
     for i, scene_prompt in enumerate(scenes):
         name = f"book_page_{i:02d}"
@@ -78,21 +80,21 @@ def main():
         full_prompt = base_prompt + scene_prompt
         print(f"Generating Book Image {i+1}/32: {scene_prompt[:50]}...")
         
+        # SANA typically uses 20 steps and guidance_scale around 5.0
         image = pipe(
-            full_prompt,
-            num_inference_steps=4,
-            guidance_scale=0.0,
+            prompt=full_prompt,
+            num_inference_steps=20,
+            guidance_scale=5.0,
             width=1024,
             height=768,
-            max_sequence_length=256
         ).images[0]
 
         image.save(output_path)
         with open(prompt_path, "w") as f:
-            f.write(f"Model: black-forest-labs/FLUX.1-schnell\nPrompt: {full_prompt}\n")
+            f.write(f"Model: {MODEL_ID}\nPrompt: {full_prompt}\n")
         print(f"Saved to {output_path}")
 
-    print("\nAll book images generated successfully!")
+    print("\nAll book images generated successfully using SANA!")
 
 if __name__ == "__main__":
     main()
