@@ -10,15 +10,10 @@ sys.path.insert(0, os.path.abspath("local_libs"))
 
 try:
     from transformers import AutoProcessor, BarkModel
-    try:
-        from diffusers import TangoFluxPipeline
-        USE_DIFFUSERS_TANGO = True
-    except ImportError:
-        from tangoflux import TangoFluxInference
-        USE_DIFFUSERS_TANGO = False
+    from diffusers import AudioLDM2Pipeline
 except ImportError as e:
     print(f"Warning: Could not import some libraries: {e}")
-    print("This script requires 'tangoflux' or 'diffusers>=0.31.0' and 'transformers'.")
+    print("This script requires 'diffusers' and 'transformers'.")
 
 # Constants
 HQ_DIR = "moon_base_assets_hq"
@@ -26,10 +21,9 @@ GAME_DIR = "moon_base_assets"
 NUMBERS_HQ = os.path.join(HQ_DIR, "numbers")
 NUMBERS_GAME = os.path.join(GAME_DIR, "numbers")
 
-# Mac M1/M2/M3 usually prefers "mps", but TangoFlux might require CUDA or CPU for now
+# Mac M1/M2/M3 usually prefers "mps"
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-# TangoFlux prefers bfloat16 on CUDA, float32 on MPS/CPU
-TORCH_DTYPE = torch.bfloat16 if DEVICE == "cuda" else torch.float32
+TORCH_DTYPE = torch.float32 # AudioLDM2 works well with float32
 
 if not os.path.exists(HQ_DIR):
     os.makedirs(HQ_DIR)
@@ -43,7 +37,7 @@ if not os.path.exists(NUMBERS_GAME):
 # Models
 bark_processor = None
 bark_model = None
-tango_model = None
+audioldm_pipe = None
 
 def get_bark():
     global bark_processor, bark_model
@@ -53,15 +47,12 @@ def get_bark():
         bark_model = BarkModel.from_pretrained("suno/bark").to(DEVICE)
     return bark_processor, bark_model
 
-def get_tango():
-    global tango_model
-    if tango_model is None:
-        print("Loading TangoFlux...")
-        if USE_DIFFUSERS_TANGO:
-            tango_model = TangoFluxPipeline.from_pretrained("declare-lab/TangoFlux", torch_dtype=TORCH_DTYPE).to(DEVICE)
-        else:
-            tango_model = TangoFluxInference(name="declare-lab/TangoFlux", device=DEVICE)
-    return tango_model
+def get_audioldm():
+    global audioldm_pipe
+    if audioldm_pipe is None:
+        print("Loading AudioLDM2...")
+        audioldm_pipe = AudioLDM2Pipeline.from_pretrained("cvssp/audioldm2-large", torch_dtype=TORCH_DTYPE).to(DEVICE)
+    return audioldm_pipe
 
 def gen_bark(text, filename, preset="v2/en_speaker_6", target_dir=HQ_DIR):
     wav_path = os.path.join(target_dir, filename + ".wav")
@@ -79,30 +70,18 @@ def gen_bark(text, filename, preset="v2/en_speaker_6", target_dir=HQ_DIR):
     scipy.io.wavfile.write(wav_path, rate=model.generation_config.sample_rate, data=audio_array)
     return wav_path
 
-def gen_tango(prompt, filename, duration=10.0, steps=25):
+def gen_sfx(prompt, filename, duration=10.0, steps=25):
     wav_path = os.path.join(HQ_DIR, filename + ".wav")
     if os.path.exists(wav_path):
-        print(f"Skipping TangoFlux generation: {filename} (already exists)")
+        print(f"Skipping SFX generation: {filename} (already exists)")
         return wav_path
 
-    print(f"Generating TangoFlux (SFX): {filename}...")
-    model = get_tango()
+    print(f"Generating SFX: {filename}...")
+    pipe = get_audioldm()
     
-    if USE_DIFFUSERS_TANGO:
-        audio = model(prompt, num_inference_steps=steps, duration=duration).audios[0]
-    else:
-        # TangoFluxInference.generate returns a torch tensor [channels, samples]
-        audio_tensor = model.generate(prompt, steps=steps, duration=duration)
-        audio = audio_tensor.float().cpu().numpy()
-        # If it's [channels, samples], and we want [samples] or similar
-        if audio.ndim > 1:
-            # Most diffusers output is mono or interleaved? 
-            # TangoFlux output is usually [1, samples] or [2, samples]
-            # soundfile/scipy expects [samples, channels]
-            audio = audio.T
+    audio = pipe(prompt, num_inference_steps=steps, audio_length_in_s=duration).audios[0]
     
     # Normalize
-    # Calculate RMS on the numpy array
     rms = np.sqrt(np.mean(audio**2))
     target_rms = 10**(-18.0 / 20)
     if rms > 0:
@@ -113,27 +92,17 @@ def gen_tango(prompt, filename, duration=10.0, steps=25):
 
     # Loopable processing for long backgrounds
     if duration >= 15.0 and filename not in ["ending_synth", "backstory", "intro_synth"]:
-        sample_rate = 44100 
-        fade_samples = int(4.0 * sample_rate) # Use 4s fade for smoother 30s loops
+        sample_rate = 16000 # AudioLDM2 is usually 16kHz
+        fade_samples = int(4.0 * sample_rate)
         if len(audio) > fade_samples * 2:
-            # Assuming mono for simplicity of blending logic if it was flattened or just take first channel
-            if audio.ndim > 1:
-                start_fade = audio[:fade_samples, :]
-                end_fade = audio[-fade_samples:, :]
-                middle = audio[fade_samples:-fade_samples, :]
-                alpha = np.linspace(0, 1, fade_samples)[:, np.newaxis]
-                blended = end_fade * (1 - alpha) + start_fade * alpha
-                audio = np.concatenate([blended, middle])
-            else:
-                start_fade = audio[:fade_samples]
-                end_fade = audio[-fade_samples:]
-                middle = audio[fade_samples:-fade_samples]
-                alpha = np.linspace(0, 1, fade_samples)
-                blended = end_fade * (1 - alpha) + start_fade * alpha
-                audio = np.concatenate([blended, middle])
+            start_fade = audio[:fade_samples]
+            end_fade = audio[-fade_samples:]
+            middle = audio[fade_samples:-fade_samples]
+            alpha = np.linspace(0, 1, fade_samples)
+            blended = end_fade * (1 - alpha) + start_fade * alpha
+            audio = np.concatenate([blended, middle])
 
-    # TangoFlux output is 44100Hz
-    scipy.io.wavfile.write(wav_path, rate=44100, data=(audio * 32767).astype(np.int16))
+    scipy.io.wavfile.write(wav_path, rate=16000, data=(audio * 32767).astype(np.int16))
     return wav_path
 
 def convert_to_ogg(wav_path, ogg_name, quality=6, target_dir=GAME_DIR):
@@ -265,18 +234,18 @@ def main():
     }
 
     # Generation Execution
-    # SFX - TangoFlux
+    # SFX - AudioLDM2
     for name, prompt in backgrounds.items():
-        wav = gen_tango(prompt, name, duration=30.0)
+        wav = gen_sfx(prompt, name, duration=30.0)
         convert_to_ogg(wav, name)
 
     for name, prompt in triggers.items():
         duration = 1.0 if name == "terminal_tick" else 2.0 if name in ["elevator_button", "lever_clonk", "drawer_open"] else 5.0
-        wav = gen_tango(prompt, name, duration=duration)
+        wav = gen_sfx(prompt, name, duration=duration)
         convert_to_ogg(wav, name)
 
     for name, (prompt, dur) in specials.items():
-        wav = gen_tango(prompt, name, duration=dur)
+        wav = gen_sfx(prompt, name, duration=dur)
         convert_to_ogg(wav, name)
 
     # Voices - Bark Large

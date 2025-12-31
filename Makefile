@@ -45,7 +45,6 @@ setup_python:
 		"soundfile" \
 		"opencv-python" \
 		"moviepy" \
-		"tangoflux" \
 		"datasets" \
 		"google-genai" \
 		"runwayml"
