@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: View from crater ridge of enormous lunar station, industrial 1950s design, fleet of rockets nearby, majestic. variation 3

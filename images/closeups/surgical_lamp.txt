@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Medical Lab
+Prompt: Close-up of a large multi-bulb stainless steel surgical lamp, bright cold white light, glass lenses, 1950s lunar medical infirmary atmosphere.

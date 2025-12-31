@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Communications Array (Item)
+Prompt: Extreme close-up of a 1950s retro-futuristic electronic control board, glowing vacuum tubes, complex colorful wiring, gold contacts, dusty glass, cinematic lighting.

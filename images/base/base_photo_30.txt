@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: Close-up of base exterior, rusted steel girders, rivets, brutalist form, harsh lunar sun, 35mm film grain. variation 2

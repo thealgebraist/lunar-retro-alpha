@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: High-altitude aerial view of sprawling brutalist lunar station, cratered moon landscape, 1950s retro-futurism, vast scale. variation 0

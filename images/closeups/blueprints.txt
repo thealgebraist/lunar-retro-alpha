@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Mine Work Room
+Prompt: Close-up of large blue blueprints spread on a grimy floor, showing technical drawings of a moon base, technical annotations, 1950s engineering.

@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: High-quality 1950s retro-futuristic photo of a lunar mine room: Mine Level: Bunk Room. Cramped living quarters. Triple-stacked bunk beds. A reading lamp flickers over a pile of old magazines. Realistic textures, cinematic lighting, dramatic shadows, industrial sci-fi noir, masterpiece, variation 0

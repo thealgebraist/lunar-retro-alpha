@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Elevator Lobbies
+Prompt: Close-up of a single circular brass elevator button labeled 'LOWER LEVELS' in a retro font, recessed in a brushed aluminum panel, fingerprint smudges, 1950s industrial.

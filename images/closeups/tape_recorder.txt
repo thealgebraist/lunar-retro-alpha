@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Mine Work Room
+Prompt: Close-up of a 1950s reel-to-reel tape recorder on a wooden desk, magnetic tape spinning, chrome switches, grainy shadows, cinematic sci-fi noir.

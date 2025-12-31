@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Launch Control / Security Hub
+Prompt: Macro shot of a row of glowing nixie tubes displaying orange numbers, dark industrial console background, 1950s retro-tech, warm bokeh.

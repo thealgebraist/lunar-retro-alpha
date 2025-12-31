@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Security Hub
+Prompt: Close-up of a grainy curved CRT monitor screen showing a green-tinted camera feed of a lunar corridor, scanlines, plastic housing, 1950s tech.

@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: High-quality 1950s retro-futuristic photo of a lunar mine room: Mine Level: Showers. Communal showers. The tiles are cracked and yellowed. Water drips rhythmically. Realistic textures, cinematic lighting, dramatic shadows, industrial sci-fi noir, masterpiece, variation 1

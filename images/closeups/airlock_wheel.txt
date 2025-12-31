@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Observation Dome
+Prompt: Close-up of a heavy cast-iron emergency airlock wheel, painted red, bolted to a thick glass dome, frost patterns on the metal, 1950s brutalist moon base.

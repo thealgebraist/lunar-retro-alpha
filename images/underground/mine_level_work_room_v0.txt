@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: High-quality 1950s retro-futuristic photo of a lunar mine room: Mine Level: Work Room. A cluttered workspace. Blueprints scattered on the floor. A heavy desk sits against the wall with a tape recorder on it. A small, pixelated picture hangs on the wall. Realistic textures, cinematic lighting, dramatic shadows, industrial sci-fi noir, masterpiece, variation 0

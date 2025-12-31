@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Mine Storage
+Prompt: Close-up of a massive industrial steel lever mounted on a rough rock wall, heavy mechanical gears, oily sheen, 1950s mining equipment.

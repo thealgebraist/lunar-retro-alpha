@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Bunk Room
+Prompt: Close-up of triple-stacked metallic bunk beds carved into moon rock, thin mattresses, quilted blankets, 1950s lunar living quarters.

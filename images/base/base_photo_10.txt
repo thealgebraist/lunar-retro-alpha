@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: Close-up of massive reinforced glass observation dome on moon base, frost on edges, 1950s industrial detail, stars. variation 2

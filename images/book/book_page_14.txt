@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: A high-quality close-up photograph of an old open hardcover book resting on a dark wooden table in a dimly lit library. The paper is aged and yellowed. On the open pages, there is a large, detailed black-and-white 1950s style photograph showing: a 1950s newspaper advertisement with the headline 'YOUR NEW HOME ON THE MOON!', showing a stylized drawing of the base

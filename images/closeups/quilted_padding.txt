@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Elevator Interior / Escape Pod
+Prompt: Macro shot of silver quilted metallic padding on an elevator wall, heavy industrial stitching, shadows, 1950s space station aesthetic.

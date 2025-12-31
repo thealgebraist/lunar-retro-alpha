@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Mine Storage
+Prompt: Close-up of a heavy industrial pickaxe resting on a wooden crate, rusted steel head, lunar dust, 1950s mining area, harsh lighting.

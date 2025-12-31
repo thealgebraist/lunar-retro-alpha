@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Sleeping Pods (Item)
+Prompt: Close-up of a heavy lead-lined cylindrical battery cell, pulsing with a sapphire blue sapphire light, metallic finish, labeled 'LUNAR-CORE TYPE 4', 1950s industrial.

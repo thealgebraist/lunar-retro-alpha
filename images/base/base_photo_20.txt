@@ -1,0 +1,2 @@
+Model: black-forest-labs/FLUX.1-schnell
+Prompt: Low-angle shot of towering communications antennas on moon base, pointing to earth, brutalist concrete, cinematic. variation 0

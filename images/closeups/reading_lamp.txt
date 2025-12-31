@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Bunk Room
+Prompt: Close-up of a small articulated metal reading lamp, warm incandescent glow, reflecting off a stack of aged magazines, 1950s retro interior.

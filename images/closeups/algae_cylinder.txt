@@ -1,0 +1,3 @@
+Model: black-forest-labs/FLUX.1-schnell
+Location: Oxygen Scrubbers
+Prompt: Close-up of a giant glass cylinder filled with bubbling thick green algae, internal lights illuminating the water, metal clamps and pipes, 1950s life support.
