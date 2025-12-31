@@ -47,7 +47,9 @@ setup_python:
 		"moviepy" \
 		"datasets" \
 		"google-genai" \
-		"runwayml"
+		"runwayml" \
+		"sentencepiece" \
+		"protobuf"
 
 setup_zig:
 	@if [ ! -x "$(ZIG)" ]; then \
