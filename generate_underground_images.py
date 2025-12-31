@@ -90,10 +90,9 @@ def main():
                 print(f"Skipping {name} (already exists)")
                 continue
 
-            # Construct prompt for Flux
-            prompt = f"High-quality 1950s retro-futuristic photo of a lunar mine room: {room['name']}. {room['desc']} Realistic textures, cinematic lighting, dramatic shadows, industrial sci-fi noir, masterpiece, variation {v}" 
-            
-            print(f"Generating image {total_images+1}/32: {name}...")
+                        # Construct prompt for Flux - shortened to avoid CLIP truncation
+                        prompt = f"1950s retro-futuristic photo of lunar mine {room['name']}: {room['desc']} Cinematic, industrial sci-fi, realistic, high detail, variation {v}"
+                        print(f"Generating image {total_images+1}/32: {name}...")
             image = pipe(
                 prompt,
                 num_inference_steps=4,
