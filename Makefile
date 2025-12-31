@@ -18,7 +18,7 @@ ASSET_DIR := moon_base_assets
 WASM_TARGET := game.wasm
 WASM_B64 := game.wasm.base64
 
-.PHONY: all build clean gensamples genimages genvideo genhistory genbook genwords setup_tools setup_zig setup_ffmpeg setup_python
+.PHONY: all build clean gensamples genimages genvideo genhistory genbook genwords genunderground setup_tools setup_zig setup_ffmpeg setup_python
 
 all: build
 
@@ -94,6 +94,9 @@ genbook: setup_tools
 
 genwords: setup_tools
 	$(VENV_PYTHON) generate_common_words.py
+
+genunderground: setup_tools
+	$(VENV_PYTHON) generate_underground_images.py
 
 clean:
 	rm -f $(WASM_TARGET) $(WASM_B64) game.wasm.o backstory_frames.json
